@@ -84,7 +84,7 @@ const drawMatchScoreSheet = (doc: jsPDF, match: any) => {
                    const imgSize = 18; // 18mm image in 22.5mm cell
                    const x = data.cell.x + (data.cell.width - imgSize) / 2;
                    const y = data.cell.y + (data.cell.height - imgSize) / 2;
-                   doc.addImage(match.team_a.logotype, 'PNG', x, y, imgSize, imgSize);
+                   doc.addImage(match.team_a.logotype, 'PNG', x, y, imgSize, imgSize, undefined, 'FAST');
                } catch (e) { console.error("Error adding Team A logo", e); }
            }
            // Team B Logo (Row 0, Col 4)
@@ -93,7 +93,7 @@ const drawMatchScoreSheet = (doc: jsPDF, match: any) => {
                    const imgSize = 18; // 18mm image in 22.5mm cell
                    const x = data.cell.x + (data.cell.width - imgSize) / 2;
                    const y = data.cell.y + (data.cell.height - imgSize) / 2;
-                   doc.addImage(match.team_b.logotype, 'PNG', x, y, imgSize, imgSize);
+                   doc.addImage(match.team_b.logotype, 'PNG', x, y, imgSize, imgSize, undefined, 'FAST');
                } catch (e) { console.error("Error adding Team B logo", e); }
            }
         }
@@ -386,13 +386,13 @@ const drawMatchScoreSheet = (doc: jsPDF, match: any) => {
 };
 
 export const generateMatchPDF = (match: any) => {
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
     drawMatchScoreSheet(doc, match);
     return doc;
 };
 
 export const generateMatchesPDF = (matches: any[]) => {
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
     matches.forEach((match, index) => {
         if (index > 0) {
             doc.addPage();
