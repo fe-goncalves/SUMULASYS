@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  
+  /* Modern Dark Palette - Full Black based */
+  --color-dark-950: #000000; /* Deepest background */
+  --color-dark-900: #0a0a0a; /* Card background */
+  --color-dark-800: #171717; /* Hover state */
+  --color-dark-700: #262626; /* Border */
+  --color-dark-600: #404040; /* Muted text */
+
+  /* Accent Color - New Palette */
+  --color-orange-500: #ff8c00; /* Primary Brand Color */
+  --color-orange-600: #ff5f00; /* Darker/Hover */
+  --color-orange-400: #ffc300; /* Lighter/Amber */
+  --color-orange-300: #ffd400; /* Yellow/Gold */
+  
+  /* Glass Effect Variables - Liquid Glass */
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-blur: 20px;
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.36);
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-dark-950);
+  color: #FFFFFF;
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(255, 140, 0, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(255, 95, 0, 0.08) 0%, transparent 30%);
+  min-height: 100vh;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-dark-700);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-dark-600);
+}
+
+/* Utility classes for liquid glassmorphism */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  background-image: linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  color: white;
+  transition: all 0.2s;
+  backdrop-filter: blur(10px);
+}
+.glass-input:focus {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--color-orange-500);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.2);
+}
