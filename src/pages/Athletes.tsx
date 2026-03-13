@@ -28,7 +28,8 @@ export default function Athletes() {
       fetchAthletes(),
       fetchTeams()
     ]);
-    setAthletes(athletesData);
+    const sortedAthletes = athletesData.sort((a: any, b: any) => (a.surname || a.fullname || '').localeCompare(b.surname || b.fullname || ''));
+    setAthletes(sortedAthletes);
     setTeams(teamsData);
   }
 

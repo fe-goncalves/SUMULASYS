@@ -28,7 +28,8 @@ export default function Committee() {
       fetchCommittee(),
       fetchTeams()
     ]);
-    setCommittee(committeeData);
+    const sortedCommittee = committeeData.sort((a: any, b: any) => (a.surname || a.fullname || '').localeCompare(b.surname || b.fullname || ''));
+    setCommittee(sortedCommittee);
     setTeams(teamsData);
   }
 

@@ -6,6 +6,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
 import { motion } from 'framer-motion';
 import TeamCard from '../components/TeamCard';
+import { getDominantColor } from '../utils/colorExtractor';
 
 export default function Teams() {
   const [teams, setTeams] = useState([]);
@@ -24,7 +25,8 @@ export default function Teams() {
 
   async function loadTeams() {
     const data = await fetchTeams();
-    setTeams(data);
+    const sortedTeams = data.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
+    setTeams(sortedTeams);
   }
 
   function handleDeleteClick(id, e) {
@@ -51,15 +53,17 @@ export default function Teams() {
     const file = data.logotype[0];
     if (file) {
         const reader = new FileReader();
-        reader.onloadend = () => {
-            const processedData = { ...data, logotype: reader.result };
+        reader.onloadend = async () => {
+            const base64Image = reader.result as string;
+            const main_color = await getDominantColor(base64Image);
+            const processedData = { ...data, logotype: base64Image, main_color };
             setPendingData(processedData);
             setSummaryModalOpen(true);
         };
         reader.readAsDataURL(file);
     } else {
         // If no file, ensure logotype is null or empty string if API expects it
-        const processedData = { ...data, logotype: null };
+        const processedData = { ...data, logotype: null, main_color: '#f97316' };
         setPendingData(processedData);
         setSummaryModalOpen(true);
     }
@@ -146,18 +150,6 @@ export default function Teams() {
                     className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50 uppercase font-mono" 
                     placeholder="LAL" 
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1.5">Main Color</label>
-                  <div className="flex items-center gap-3">
-                      <input 
-                          type="color" 
-                          {...register('main_color')} 
-                          className="w-12 h-12 rounded-lg cursor-pointer bg-transparent border-0 p-0"
-                          defaultValue="#f97316"
-                      />
-                      <span className="text-sm text-gray-500">Pick a color for the team identity</span>
-                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1.5">Logotype (PNG)</label>

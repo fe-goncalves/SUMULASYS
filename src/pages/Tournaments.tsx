@@ -25,7 +25,8 @@ export default function Tournaments() {
 
   async function loadTournaments() {
     const data = await fetchTournaments();
-    setTournaments(data);
+    const sortedTournaments = data.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
+    setTournaments(sortedTournaments);
   }
 
   function openAddModal() {

@@ -17,6 +17,8 @@ export default function Matches() {
   const [isExporting, setIsExporting] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
+  const [filterDate, setFilterDate] = useState('');
+  const [filterTournament, setFilterTournament] = useState('');
   
   const { register, handleSubmit, reset, setValue } = useForm();
 
@@ -34,6 +36,18 @@ export default function Matches() {
     setTeams(teamsData);
     setTournaments(tournamentsData);
   }
+
+  const filteredMatches = matches
+    .filter((match: any) => {
+      if (filterDate && match.date !== filterDate) return false;
+      if (filterTournament && match.tournament_id !== filterTournament) return false;
+      return true;
+    })
+    .sort((a: any, b: any) => {
+      const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return (a.phase || '').localeCompare(b.phase || '');
+    });
 
   function openAddModal() {
     setEditingMatch(null);
@@ -106,10 +120,10 @@ export default function Matches() {
   }
 
   function toggleSelectAll() {
-      if (selectedMatches.size === matches.length) {
+      if (selectedMatches.size === filteredMatches.length) {
           setSelectedMatches(new Set());
       } else {
-          setSelectedMatches(new Set(matches.map(m => m.id)));
+          setSelectedMatches(new Set(filteredMatches.map((m: any) => m.id)));
       }
   }
 
@@ -143,12 +157,30 @@ export default function Matches() {
 
   return (
     <div className="space-y-8">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">Matches</h1>
           <p className="text-gray-400 mt-1">Schedule and manage game fixtures.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3 items-center">
+            <div className="flex gap-2">
+              <input 
+                type="date" 
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                className="glass-input rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50"
+              />
+              <select 
+                value={filterTournament}
+                onChange={(e) => setFilterTournament(e.target.value)}
+                className="glass-input rounded-xl px-3 py-2 text-sm text-white focus:ring-1 focus:ring-orange-500/50"
+              >
+                <option value="">All Competitions</option>
+                {tournaments.map((t: any) => (
+                  <option key={t.id} value={t.id}>{t.fullname}</option>
+                ))}
+              </select>
+            </div>
             {selectedMatches.size > 0 && (
                 <button
                     onClick={handleBatchExport}
@@ -170,7 +202,7 @@ export default function Matches() {
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        {matches.map((match) => (
+        {filteredMatches.map((match: any) => (
           <div 
             key={match.id} 
             className={`bg-dark-800 p-4 rounded-2xl flex items-center gap-6 group hover:bg-dark-700 transition-all relative overflow-hidden border ${selectedMatches.has(match.id) ? 'border-orange-500/50 bg-orange-500/5' : 'border-white/5'}`}
@@ -262,13 +294,13 @@ export default function Matches() {
           </div>
         ))}
 
-        {matches.length === 0 && (
+        {filteredMatches.length === 0 && (
           <div className="glass-panel rounded-2xl p-12 text-center flex flex-col items-center justify-center border border-dashed border-white/10">
             <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
                 <Calendar size={32} className="text-gray-600" />
             </div>
-            <h3 className="text-lg font-medium text-white mb-1">No matches scheduled</h3>
-            <p className="text-gray-500 text-sm">Create a new match to get started.</p>
+            <h3 className="text-lg font-medium text-white mb-1">No matches found</h3>
+            <p className="text-gray-500 text-sm">Adjust filters or create a new match to get started.</p>
           </div>
         )}
       </div>
