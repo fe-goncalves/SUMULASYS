@@ -12,6 +12,7 @@ export default function MatchDetail() {
   const [match, setMatch] = useState<any>(null);
   const [teams, setTeams] = useState([]);
   const [tournaments, setTournaments] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -23,14 +24,21 @@ export default function MatchDetail() {
   }, [id]);
 
   async function loadData() {
-    const [matchData, teamsData, tournamentsData] = await Promise.all([
-        fetchMatch(id!),
-        fetchTeams(),
-        fetchTournaments()
-    ]);
-    setMatch(matchData);
-    setTeams(teamsData);
-    setTournaments(tournamentsData);
+    setIsLoading(true);
+    try {
+      const [matchData, teamsData, tournamentsData] = await Promise.all([
+          fetchMatch(id!),
+          fetchTeams(),
+          fetchTournaments()
+      ]);
+      setMatch(matchData || null);
+      setTeams(teamsData || []);
+      setTournaments(tournamentsData || []);
+    } catch (error) {
+      console.error("Failed to load match data:", error);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   const generatePDF = () => {
@@ -70,7 +78,15 @@ export default function MatchDetail() {
     }
   }
 
-  if (!match) return <div className="text-white">Loading...</div>;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+      </div>
+    );
+  }
+
+  if (!match) return <div className="text-white">Match not found</div>;
 
   return (
     <div className="space-y-8">

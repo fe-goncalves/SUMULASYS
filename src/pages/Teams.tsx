@@ -10,6 +10,7 @@ import { getDominantColor } from '../utils/colorExtractor';
 
 export default function Teams() {
   const [teams, setTeams] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [teamToDelete, setTeamToDelete] = useState(null);
@@ -24,9 +25,16 @@ export default function Teams() {
   }, []);
 
   async function loadTeams() {
-    const data = await fetchTeams();
-    const sortedTeams = data.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
-    setTeams(sortedTeams);
+    setIsLoading(true);
+    try {
+      const data = await fetchTeams();
+      const sortedTeams = (data || []).sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
+      setTeams(sortedTeams);
+    } catch (error) {
+      console.error("Failed to load teams:", error);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   function handleDeleteClick(id, e) {
@@ -82,6 +90,14 @@ export default function Teams() {
     }
     setSummaryModalOpen(false);
     setPendingData(null);
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+      </div>
+    );
   }
 
   return (

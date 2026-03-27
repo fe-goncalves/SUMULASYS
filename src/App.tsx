@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Teams from './pages/Teams';
@@ -15,8 +15,13 @@ import TournamentDetail from './pages/TournamentDetail';
 import Matches from './pages/Matches';
 import MatchDetail from './pages/MatchDetail';
 import Settings from './pages/Settings';
+import { storage } from './storage';
 
 export default function App() {
+  useEffect(() => {
+    storage.migrateData().catch(console.error);
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>

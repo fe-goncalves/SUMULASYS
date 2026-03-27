@@ -11,6 +11,7 @@ export default function Matches() {
   const [matches, setMatches] = useState([]);
   const [teams, setTeams] = useState([]);
   const [tournaments, setTournaments] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMatch, setEditingMatch] = useState(null);
   const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
@@ -27,14 +28,21 @@ export default function Matches() {
   }, []);
 
   async function loadData() {
-    const [matchesData, teamsData, tournamentsData] = await Promise.all([
-      fetchMatches(),
-      fetchTeams(),
-      fetchTournaments()
-    ]);
-    setMatches(matchesData);
-    setTeams(teamsData);
-    setTournaments(tournamentsData);
+    setIsLoading(true);
+    try {
+      const [matchesData, teamsData, tournamentsData] = await Promise.all([
+        fetchMatches(),
+        fetchTeams(),
+        fetchTournaments()
+      ]);
+      setMatches(matchesData || []);
+      setTeams(teamsData || []);
+      setTournaments(tournamentsData || []);
+    } catch (error) {
+      console.error("Failed to load data:", error);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   const filteredMatches = matches
@@ -153,6 +161,14 @@ export default function Matches() {
           setIsExporting(false);
           setSelectedMatches(new Set()); // Clear selection after export
       }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+      </div>
+    );
   }
 
   return (

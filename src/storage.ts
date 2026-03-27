@@ -1,3 +1,4 @@
+import localforage from 'localforage';
 
 const STORAGE_KEY = 'app_data_v1';
 
@@ -59,20 +60,53 @@ const initialData: AppData = {
   matches: []
 };
 
-function loadData(): AppData {
-  const data = localStorage.getItem(STORAGE_KEY);
-  return data ? JSON.parse(data) : initialData;
+async function loadData(): Promise<AppData> {
+  try {
+    const data = await localforage.getItem<AppData>(STORAGE_KEY);
+    if (data) {
+      return {
+        teams: data.teams || [],
+        athletes: data.athletes || [],
+        committee: data.committee || [],
+        tournaments: data.tournaments || [],
+        matches: data.matches || []
+      };
+    }
+    
+    // Attempt migration from localStorage
+    const oldData = localStorage.getItem(STORAGE_KEY);
+    if (oldData) {
+      const parsed = JSON.parse(oldData) as AppData;
+      const merged = {
+        teams: parsed.teams || [],
+        athletes: parsed.athletes || [],
+        committee: parsed.committee || [],
+        tournaments: parsed.tournaments || [],
+        matches: parsed.matches || []
+      };
+      await localforage.setItem(STORAGE_KEY, merged);
+      return merged;
+    }
+  } catch (error) {
+    console.error('Error loading data from localforage:', error);
+  }
+  return initialData;
 }
 
-function saveData(data: AppData) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+async function saveData(data: AppData): Promise<void> {
+  try {
+    await localforage.setItem(STORAGE_KEY, data);
+  } catch (error) {
+    console.error('Error saving data to localforage:', error);
+    throw error;
+  }
 }
 
 export const storage = {
   // Teams
-  getTeams: () => loadData().teams,
-  getTeam: (id: string) => {
-    const data = loadData();
+  getTeams: async () => (await loadData()).teams,
+  getTeam: async (id: string) => {
+    const data = await loadData();
     const team = data.teams.find(t => t.id === id);
     if (!team) return null;
     
@@ -81,38 +115,33 @@ export const storage = {
     
     return { ...team, athletes, committee };
   },
-  createTeam: (team: Team) => {
-    const data = loadData();
+  createTeam: async (team: Team) => {
+    const data = await loadData();
     if (data.teams.find(t => t.id === team.id)) throw new Error('Team ID already exists');
     data.teams.push(team);
-    saveData(data);
+    await saveData(data);
     return team;
   },
-  updateTeam: (id: string, updates: Partial<Team>) => {
-    const data = loadData();
+  updateTeam: async (id: string, updates: Partial<Team>) => {
+    const data = await loadData();
     const index = data.teams.findIndex(t => t.id === id);
     if (index === -1) throw new Error('Team not found');
     data.teams[index] = { ...data.teams[index], ...updates };
-    saveData(data);
+    await saveData(data);
     return data.teams[index];
   },
-  deleteTeam: (id: string) => {
-    const data = loadData();
+  deleteTeam: async (id: string) => {
+    const data = await loadData();
     data.teams = data.teams.filter(t => t.id !== id);
-    // Cascade delete or set to null? Server implementation didn't cascade delete but frontend might expect it.
-    // Let's check server.ts... server.ts didn't have explicit cascade delete in the code I saw, but SQLite might have handled it if configured.
-    // Actually, server.ts code for deleteTeam was: db.prepare("DELETE FROM teams WHERE id = ?").run(req.params.id);
-    // And foreign keys were defined. So it might have failed if there were dependencies, or cascaded if configured.
-    // Let's assume we should clean up references to avoid broken UI.
     data.athletes = data.athletes.filter(a => a.team_id !== id);
     data.committee = data.committee.filter(c => c.team_id !== id);
     data.matches = data.matches.filter(m => m.team_a_id !== id && m.team_b_id !== id);
-    saveData(data);
+    await saveData(data);
   },
 
   // Athletes
-  getAthletes: () => {
-    const data = loadData();
+  getAthletes: async () => {
+    const data = await loadData();
     return data.athletes.map(a => {
       const team = data.teams.find(t => t.id === a.team_id);
       return {
@@ -123,34 +152,33 @@ export const storage = {
       };
     });
   },
-  createAthlete: (athlete: Athlete) => {
-    const data = loadData();
+  createAthlete: async (athlete: Athlete) => {
+    const data = await loadData();
     if (data.athletes.find(a => a.id === athlete.id)) throw new Error('Athlete with this ID already exists.');
     data.athletes.push(athlete);
-    saveData(data);
+    await saveData(data);
     return athlete;
   },
-  updateAthlete: (id: string, updates: Partial<Athlete>) => {
-    const data = loadData();
-    // Check if new ID conflicts
+  updateAthlete: async (id: string, updates: Partial<Athlete>) => {
+    const data = await loadData();
     if (updates.id && updates.id !== id && data.athletes.find(a => a.id === updates.id)) {
         throw new Error('Athlete with this ID already exists.');
     }
     const index = data.athletes.findIndex(a => a.id === id);
     if (index === -1) throw new Error('Athlete not found');
     data.athletes[index] = { ...data.athletes[index], ...updates };
-    saveData(data);
+    await saveData(data);
     return data.athletes[index];
   },
-  deleteAthlete: (id: string) => {
-    const data = loadData();
+  deleteAthlete: async (id: string) => {
+    const data = await loadData();
     data.athletes = data.athletes.filter(a => a.id !== id);
-    saveData(data);
+    await saveData(data);
   },
 
   // Committee
-  getCommittee: () => {
-    const data = loadData();
+  getCommittee: async () => {
+    const data = await loadData();
     return data.committee.map(c => {
       const team = data.teams.find(t => t.id === c.team_id);
       return {
@@ -161,34 +189,34 @@ export const storage = {
       };
     });
   },
-  createCommittee: (member: CommitteeMember) => {
-    const data = loadData();
+  createCommittee: async (member: CommitteeMember) => {
+    const data = await loadData();
     if (data.committee.find(c => c.id === member.id)) throw new Error('Member with this ID already exists.');
     data.committee.push(member);
-    saveData(data);
+    await saveData(data);
     return member;
   },
-  updateCommittee: (id: string, updates: Partial<CommitteeMember>) => {
-    const data = loadData();
+  updateCommittee: async (id: string, updates: Partial<CommitteeMember>) => {
+    const data = await loadData();
     if (updates.id && updates.id !== id && data.committee.find(c => c.id === updates.id)) {
         throw new Error('Member with this ID already exists.');
     }
     const index = data.committee.findIndex(c => c.id === id);
     if (index === -1) throw new Error('Member not found');
     data.committee[index] = { ...data.committee[index], ...updates };
-    saveData(data);
+    await saveData(data);
     return data.committee[index];
   },
-  deleteCommittee: (id: string) => {
-    const data = loadData();
+  deleteCommittee: async (id: string) => {
+    const data = await loadData();
     data.committee = data.committee.filter(c => c.id !== id);
-    saveData(data);
+    await saveData(data);
   },
 
   // Tournaments
-  getTournaments: () => loadData().tournaments,
-  getTournament: (id: string) => {
-      const data = loadData();
+  getTournaments: async () => (await loadData()).tournaments,
+  getTournament: async (id: string) => {
+      const data = await loadData();
       const tournament = data.tournaments.find(t => t.id === id);
       if (!tournament) return null;
       
@@ -211,31 +239,31 @@ export const storage = {
 
       return { ...tournament, matches };
   },
-  createTournament: (tournament: Tournament) => {
-    const data = loadData();
+  createTournament: async (tournament: Tournament) => {
+    const data = await loadData();
     if (data.tournaments.find(t => t.id === tournament.id)) throw new Error('Tournament ID already exists');
     data.tournaments.push(tournament);
-    saveData(data);
+    await saveData(data);
     return tournament;
   },
-  updateTournament: (id: string, updates: Partial<Tournament>) => {
-    const data = loadData();
+  updateTournament: async (id: string, updates: Partial<Tournament>) => {
+    const data = await loadData();
     const index = data.tournaments.findIndex(t => t.id === id);
     if (index === -1) throw new Error('Tournament not found');
     data.tournaments[index] = { ...data.tournaments[index], ...updates };
-    saveData(data);
+    await saveData(data);
     return data.tournaments[index];
   },
-  deleteTournament: (id: string) => {
-    const data = loadData();
+  deleteTournament: async (id: string) => {
+    const data = await loadData();
     data.tournaments = data.tournaments.filter(t => t.id !== id);
     data.matches = data.matches.filter(m => m.tournament_id !== id);
-    saveData(data);
+    await saveData(data);
   },
 
   // Matches
-  getMatches: () => {
-    const data = loadData();
+  getMatches: async () => {
+    const data = await loadData();
     return data.matches.map(m => {
       const tournament = data.tournaments.find(t => t.id === m.tournament_id);
       const teamA = data.teams.find(t => t.id === m.team_a_id);
@@ -253,8 +281,8 @@ export const storage = {
       };
     });
   },
-  getMatch: (id: string) => {
-    const data = loadData();
+  getMatch: async (id: string) => {
+    const data = await loadData();
     const m = data.matches.find(m => m.id === id);
     if (!m) return null;
     
@@ -283,8 +311,8 @@ export const storage = {
         team_b: { ...teamB, athletes: teamBAthletes, committee: teamBCommittee }
     };
   },
-  createMatch: (matchData: any) => {
-    const data = loadData();
+  createMatch: async (matchData: any) => {
+    const data = await loadData();
     // Find max game number to avoid collisions
     let maxNum = 0;
     data.matches.forEach(m => {
@@ -298,26 +326,47 @@ export const storage = {
     const id = `GAME ${nextNum}`;
     const newMatch = { ...matchData, id, code: id };
     data.matches.push(newMatch);
-    saveData(data);
+    await saveData(data);
     return newMatch;
   },
-  updateMatch: (id: string, updates: Partial<Match>) => {
-    const data = loadData();
+  updateMatch: async (id: string, updates: Partial<Match>) => {
+    const data = await loadData();
     const index = data.matches.findIndex(m => m.id === id);
     if (index === -1) throw new Error('Match not found');
     data.matches[index] = { ...data.matches[index], ...updates };
-    saveData(data);
+    await saveData(data);
     return data.matches[index];
   },
-  deleteMatch: (id: string) => {
-    const data = loadData();
+  deleteMatch: async (id: string) => {
+    const data = await loadData();
     data.matches = data.matches.filter(m => m.id !== id);
-    saveData(data);
+    await saveData(data);
   },
 
   // Backup/Restore
-  getBackup: () => loadData(),
-  restoreBackup: (backupData: AppData) => {
-      saveData(backupData);
+  getBackup: async () => await loadData(),
+  restoreBackup: async (backupData: AppData) => {
+      await saveData(backupData);
+  },
+  migrateData: async () => {
+    try {
+      const oldData = localStorage.getItem(STORAGE_KEY);
+      if (oldData) {
+        const parsed = JSON.parse(oldData) as AppData;
+        const merged = {
+          teams: parsed.teams || [],
+          athletes: parsed.athletes || [],
+          committee: parsed.committee || [],
+          tournaments: parsed.tournaments || [],
+          matches: parsed.matches || []
+        };
+        await localforage.setItem(STORAGE_KEY, merged);
+        console.log('Data successfully migrated from localStorage to localforage');
+        return true;
+      }
+    } catch (error) {
+      console.error('Error during data migration:', error);
+    }
+    return false;
   }
 };

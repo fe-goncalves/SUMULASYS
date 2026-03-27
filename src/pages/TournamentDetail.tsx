@@ -8,12 +8,14 @@ export default function TournamentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [tournament, setTournament] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadTournament();
   }, [id]);
 
   async function loadTournament() {
+    setIsLoading(true);
     try {
         const data = await fetchTournament(id!);
         setTournament(data);
@@ -21,10 +23,20 @@ export default function TournamentDetail() {
         console.error("Error fetching tournament:", error);
         alert("Failed to load tournament.");
         navigate('/tournaments');
+    } finally {
+        setIsLoading(false);
     }
   }
 
-  if (!tournament) return <div className="text-white">Loading...</div>;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+      </div>
+    );
+  }
+
+  if (!tournament) return <div className="text-white">Tournament not found</div>;
 
   return (
     <div className="space-y-8" style={{ '--tournament-color': tournament.main_color || '#f97316' } as React.CSSProperties}>

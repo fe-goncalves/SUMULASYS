@@ -8,6 +8,7 @@ import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
 export default function Athletes() {
   const [athletes, setAthletes] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -24,13 +25,20 @@ export default function Athletes() {
   }, []);
 
   async function loadData() {
-    const [athletesData, teamsData] = await Promise.all([
-      fetchAthletes(),
-      fetchTeams()
-    ]);
-    const sortedAthletes = athletesData.sort((a: any, b: any) => (a.surname || a.fullname || '').localeCompare(b.surname || b.fullname || ''));
-    setAthletes(sortedAthletes);
-    setTeams(teamsData);
+    setIsLoading(true);
+    try {
+      const [athletesData, teamsData] = await Promise.all([
+        fetchAthletes(),
+        fetchTeams()
+      ]);
+      const sortedAthletes = (athletesData || []).sort((a: any, b: any) => (a.surname || a.fullname || '').localeCompare(b.surname || b.fullname || ''));
+      setAthletes(sortedAthletes);
+      setTeams(teamsData || []);
+    } catch (error) {
+      console.error("Failed to load data:", error);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   function openAddModal() {
@@ -110,6 +118,14 @@ export default function Athletes() {
     const [year, month, day] = dateStr.split('-');
     return `${day}/${month}/${year}`;
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

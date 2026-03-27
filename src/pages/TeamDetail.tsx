@@ -11,6 +11,7 @@ export default function TeamDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [team, setTeam] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [allTeams, setAllTeams] = useState([]);
   const [activeTab, setActiveTab] = useState('athletes'); // 'athletes' or 'committee'
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -35,12 +36,19 @@ export default function TeamDetail() {
   }, [id]);
 
   async function loadTeam() {
-    const data = await fetchTeam(id);
-    setTeam(data);
-    // Pre-fill edit form
-    if (data) {
-        setValueEdit('fullname', data.fullname);
-        setValueEdit('shortname', data.shortname);
+    setIsLoading(true);
+    try {
+      const data = await fetchTeam(id);
+      setTeam(data || null);
+      // Pre-fill edit form
+      if (data) {
+          setValueEdit('fullname', data.fullname);
+          setValueEdit('shortname', data.shortname);
+      }
+    } catch (error) {
+      console.error("Failed to load team:", error);
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -186,7 +194,15 @@ export default function TeamDetail() {
       return dateStr;
   }
 
-  if (!team) return <div className="text-white">Loading...</div>;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+      </div>
+    );
+  }
+
+  if (!team) return <div className="text-white">Team not found</div>;
 
   return (
     <div className="space-y-8" style={{ '--team-color': dominantColor } as React.CSSProperties}>
