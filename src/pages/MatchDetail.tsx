@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Download, Edit, Trash } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { fetchMatch, updateMatch, deleteMatch, fetchTeams, fetchTournaments } from '../api';
+import { toYMD, toDMY, handleDateMask } from '../utils/dateUtils';
 import { generateMatchesPDF } from '../utils/pdfGenerator';
 import ConfirmationModal from '../components/ConfirmationModal';
 
@@ -49,7 +50,7 @@ export default function MatchDetail() {
 
   function openEditModal() {
     setValue('tournament_id', match.tournament_id);
-    setValue('date', match.date);
+    setValue('date', toDMY(match.date));
     setValue('phase', match.phase);
     setValue('round', match.round);
     setValue('team_a_id', match.team_a_id);
@@ -59,7 +60,11 @@ export default function MatchDetail() {
 
   async function onEditSubmit(data) {
     try {
-        await updateMatch(match.id, data);
+        const processedData = {
+          ...data,
+          date: toYMD(data.date)
+        };
+        await updateMatch(match.id, processedData);
         setIsEditModalOpen(false);
         loadData();
     } catch (error) {
@@ -189,7 +194,17 @@ export default function MatchDetail() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1.5">Date</label>
-                  <input type="date" {...register('date', { required: true })} className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50" />
+                  <input 
+                    type="text" 
+                    placeholder="DD/MM/YYYY"
+                    maxLength={10}
+                    {...register('date', { 
+                      required: true,
+                      pattern: /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[012])\/(19|20)\d\d$/,
+                      onChange: handleDateMask
+                    })} 
+                    className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50" 
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1.5">Phase</label>

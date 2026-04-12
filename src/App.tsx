@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Teams from './pages/Teams';
@@ -15,12 +15,39 @@ import TournamentDetail from './pages/TournamentDetail';
 import Matches from './pages/Matches';
 import MatchDetail from './pages/MatchDetail';
 import Settings from './pages/Settings';
-import { storage } from './storage';
+import Login from './pages/Login';
+import { supabase } from './supabaseClient';
 
 export default function App() {
+  const [session, setSession] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    storage.migrateData().catch(console.error);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-dark-950 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Login onLogin={() => {}} />;
+  }
 
   return (
     <BrowserRouter>

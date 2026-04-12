@@ -112,3 +112,7 @@ export async function importData(data: any): Promise<{ success: boolean; error?:
     return { success: false, error: error.message };
   }
 }
+
+export async function migrateData() {
+  return storage.migrateData();
+}

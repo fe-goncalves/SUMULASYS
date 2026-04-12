@@ -1,12 +1,11 @@
-import localforage from 'localforage';
-
-const STORAGE_KEY = 'app_data_v1';
+import { supabase } from './supabaseClient';
 
 interface Team {
   id: string;
   fullname: string;
   shortname: string;
   logotype: string | null;
+  user_id?: string;
 }
 
 interface Athlete {
@@ -15,6 +14,7 @@ interface Athlete {
   surname: string;
   date_of_birth: string;
   team_id: string;
+  user_id?: string;
 }
 
 interface CommitteeMember {
@@ -22,6 +22,7 @@ interface CommitteeMember {
   fullname: string;
   surname: string;
   team_id: string;
+  user_id?: string;
 }
 
 interface Tournament {
@@ -31,6 +32,7 @@ interface Tournament {
   season: string;
   logotype: string | null;
   main_color: string;
+  user_id?: string;
 }
 
 interface Match {
@@ -42,6 +44,7 @@ interface Match {
   phase: string;
   round: string;
   date: string;
+  user_id?: string;
 }
 
 interface AppData {
@@ -52,98 +55,55 @@ interface AppData {
   matches: Match[];
 }
 
-const initialData: AppData = {
-  teams: [],
-  athletes: [],
-  committee: [],
-  tournaments: [],
-  matches: []
-};
-
-async function loadData(): Promise<AppData> {
-  try {
-    const data = await localforage.getItem<AppData>(STORAGE_KEY);
-    if (data) {
-      return {
-        teams: data.teams || [],
-        athletes: data.athletes || [],
-        committee: data.committee || [],
-        tournaments: data.tournaments || [],
-        matches: data.matches || []
-      };
-    }
-    
-    // Attempt migration from localStorage
-    const oldData = localStorage.getItem(STORAGE_KEY);
-    if (oldData) {
-      const parsed = JSON.parse(oldData) as AppData;
-      const merged = {
-        teams: parsed.teams || [],
-        athletes: parsed.athletes || [],
-        committee: parsed.committee || [],
-        tournaments: parsed.tournaments || [],
-        matches: parsed.matches || []
-      };
-      await localforage.setItem(STORAGE_KEY, merged);
-      return merged;
-    }
-  } catch (error) {
-    console.error('Error loading data from localforage:', error);
-  }
-  return initialData;
-}
-
-async function saveData(data: AppData): Promise<void> {
-  try {
-    await localforage.setItem(STORAGE_KEY, data);
-  } catch (error) {
-    console.error('Error saving data to localforage:', error);
-    throw error;
-  }
+async function getUserId() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user?.id;
 }
 
 export const storage = {
   // Teams
-  getTeams: async () => (await loadData()).teams,
+  getTeams: async () => {
+    const { data, error } = await supabase.from('teams').select('*');
+    if (error) throw error;
+    return data;
+  },
   getTeam: async (id: string) => {
-    const data = await loadData();
-    const team = data.teams.find(t => t.id === id);
-    if (!team) return null;
+    const { data: team, error: teamError } = await supabase.from('teams').select('*').eq('id', id).single();
+    if (teamError || !team) return null;
     
-    const athletes = data.athletes.filter(a => a.team_id === id);
-    const committee = data.committee.filter(c => c.team_id === id);
+    const { data: athletes } = await supabase.from('athletes').select('*').eq('team_id', id);
+    const { data: committee } = await supabase.from('committee').select('*').eq('team_id', id);
     
-    return { ...team, athletes, committee };
+    return { ...team, athletes: athletes || [], committee: committee || [] };
   },
   createTeam: async (team: Team) => {
-    const data = await loadData();
-    if (data.teams.find(t => t.id === team.id)) throw new Error('Team ID already exists');
-    data.teams.push(team);
-    await saveData(data);
-    return team;
+    const user_id = await getUserId();
+    const { data, error } = await supabase.from('teams').insert([{ ...team, user_id }]).select().single();
+    if (error) throw error;
+    return data;
   },
   updateTeam: async (id: string, updates: Partial<Team>) => {
-    const data = await loadData();
-    const index = data.teams.findIndex(t => t.id === id);
-    if (index === -1) throw new Error('Team not found');
-    data.teams[index] = { ...data.teams[index], ...updates };
-    await saveData(data);
-    return data.teams[index];
+    const { data, error } = await supabase.from('teams').update(updates).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
   },
   deleteTeam: async (id: string) => {
-    const data = await loadData();
-    data.teams = data.teams.filter(t => t.id !== id);
-    data.athletes = data.athletes.filter(a => a.team_id !== id);
-    data.committee = data.committee.filter(c => c.team_id !== id);
-    data.matches = data.matches.filter(m => m.team_a_id !== id && m.team_b_id !== id);
-    await saveData(data);
+    // Due to foreign keys, we might need to delete related data or rely on ON DELETE CASCADE in DB
+    await supabase.from('athletes').delete().eq('team_id', id);
+    await supabase.from('committee').delete().eq('team_id', id);
+    await supabase.from('matches').delete().or(`team_a_id.eq.${id},team_b_id.eq.${id}`);
+    const { error } = await supabase.from('teams').delete().eq('id', id);
+    if (error) throw error;
   },
 
   // Athletes
   getAthletes: async () => {
-    const data = await loadData();
-    return data.athletes.map(a => {
-      const team = data.teams.find(t => t.id === a.team_id);
+    const { data: athletes, error } = await supabase.from('athletes').select('*');
+    if (error) throw error;
+    const { data: teams } = await supabase.from('teams').select('id, fullname, shortname, logotype');
+    
+    return athletes.map(a => {
+      const team = teams?.find(t => t.id === a.team_id);
       return {
         ...a,
         team_name: team?.fullname,
@@ -153,34 +113,29 @@ export const storage = {
     });
   },
   createAthlete: async (athlete: Athlete) => {
-    const data = await loadData();
-    if (data.athletes.find(a => a.id === athlete.id)) throw new Error('Athlete with this ID already exists.');
-    data.athletes.push(athlete);
-    await saveData(data);
-    return athlete;
+    const user_id = await getUserId();
+    const { data, error } = await supabase.from('athletes').insert([{ ...athlete, user_id }]).select().single();
+    if (error) throw error;
+    return data;
   },
   updateAthlete: async (id: string, updates: Partial<Athlete>) => {
-    const data = await loadData();
-    if (updates.id && updates.id !== id && data.athletes.find(a => a.id === updates.id)) {
-        throw new Error('Athlete with this ID already exists.');
-    }
-    const index = data.athletes.findIndex(a => a.id === id);
-    if (index === -1) throw new Error('Athlete not found');
-    data.athletes[index] = { ...data.athletes[index], ...updates };
-    await saveData(data);
-    return data.athletes[index];
+    const { data, error } = await supabase.from('athletes').update(updates).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
   },
   deleteAthlete: async (id: string) => {
-    const data = await loadData();
-    data.athletes = data.athletes.filter(a => a.id !== id);
-    await saveData(data);
+    const { error } = await supabase.from('athletes').delete().eq('id', id);
+    if (error) throw error;
   },
 
   // Committee
   getCommittee: async () => {
-    const data = await loadData();
-    return data.committee.map(c => {
-      const team = data.teams.find(t => t.id === c.team_id);
+    const { data: committee, error } = await supabase.from('committee').select('*');
+    if (error) throw error;
+    const { data: teams } = await supabase.from('teams').select('id, fullname, shortname, logotype');
+
+    return committee.map(c => {
+      const team = teams?.find(t => t.id === c.team_id);
       return {
         ...c,
         team_name: team?.fullname,
@@ -190,84 +145,81 @@ export const storage = {
     });
   },
   createCommittee: async (member: CommitteeMember) => {
-    const data = await loadData();
-    if (data.committee.find(c => c.id === member.id)) throw new Error('Member with this ID already exists.');
-    data.committee.push(member);
-    await saveData(data);
-    return member;
+    const user_id = await getUserId();
+    const { data, error } = await supabase.from('committee').insert([{ ...member, user_id }]).select().single();
+    if (error) throw error;
+    return data;
   },
   updateCommittee: async (id: string, updates: Partial<CommitteeMember>) => {
-    const data = await loadData();
-    if (updates.id && updates.id !== id && data.committee.find(c => c.id === updates.id)) {
-        throw new Error('Member with this ID already exists.');
-    }
-    const index = data.committee.findIndex(c => c.id === id);
-    if (index === -1) throw new Error('Member not found');
-    data.committee[index] = { ...data.committee[index], ...updates };
-    await saveData(data);
-    return data.committee[index];
+    const { data, error } = await supabase.from('committee').update(updates).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
   },
   deleteCommittee: async (id: string) => {
-    const data = await loadData();
-    data.committee = data.committee.filter(c => c.id !== id);
-    await saveData(data);
+    const { error } = await supabase.from('committee').delete().eq('id', id);
+    if (error) throw error;
   },
 
   // Tournaments
-  getTournaments: async () => (await loadData()).tournaments,
+  getTournaments: async () => {
+    const { data, error } = await supabase.from('tournaments').select('*');
+    if (error) throw error;
+    return data;
+  },
   getTournament: async (id: string) => {
-      const data = await loadData();
-      const tournament = data.tournaments.find(t => t.id === id);
-      if (!tournament) return null;
-      
-      const matches = data.matches
-        .filter(m => m.tournament_id === id)
-        .map(m => {
-            const teamA = data.teams.find(t => t.id === m.team_a_id);
-            const teamB = data.teams.find(t => t.id === m.team_b_id);
-            return {
-                ...m,
-                team_a_name: teamA?.fullname,
-                team_a_shortname: teamA?.shortname,
-                team_a_logotype: teamA?.logotype,
-                team_b_name: teamB?.fullname,
-                team_b_shortname: teamB?.shortname,
-                team_b_logotype: teamB?.logotype,
-            };
-        })
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const { data: tournament, error: tError } = await supabase.from('tournaments').select('*').eq('id', id).single();
+    if (tError || !tournament) return null;
+    
+    const { data: matches } = await supabase.from('matches').select('*').eq('tournament_id', id);
+    const { data: teams } = await supabase.from('teams').select('id, fullname, shortname, logotype');
 
-      return { ...tournament, matches };
+    const enrichedMatches = (matches || [])
+      .map(m => {
+          const teamA = teams?.find(t => t.id === m.team_a_id);
+          const teamB = teams?.find(t => t.id === m.team_b_id);
+          return {
+              ...m,
+              team_a_name: teamA?.fullname,
+              team_a_shortname: teamA?.shortname,
+              team_a_logotype: teamA?.logotype,
+              team_b_name: teamB?.fullname,
+              team_b_shortname: teamB?.shortname,
+              team_b_logotype: teamB?.logotype,
+          };
+      })
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    return { ...tournament, matches: enrichedMatches };
   },
   createTournament: async (tournament: Tournament) => {
-    const data = await loadData();
-    if (data.tournaments.find(t => t.id === tournament.id)) throw new Error('Tournament ID already exists');
-    data.tournaments.push(tournament);
-    await saveData(data);
-    return tournament;
+    const user_id = await getUserId();
+    const { data, error } = await supabase.from('tournaments').insert([{ ...tournament, user_id }]).select().single();
+    if (error) throw error;
+    return data;
   },
   updateTournament: async (id: string, updates: Partial<Tournament>) => {
-    const data = await loadData();
-    const index = data.tournaments.findIndex(t => t.id === id);
-    if (index === -1) throw new Error('Tournament not found');
-    data.tournaments[index] = { ...data.tournaments[index], ...updates };
-    await saveData(data);
-    return data.tournaments[index];
+    const { data, error } = await supabase.from('tournaments').update(updates).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
   },
   deleteTournament: async (id: string) => {
-    const data = await loadData();
-    data.tournaments = data.tournaments.filter(t => t.id !== id);
-    data.matches = data.matches.filter(m => m.tournament_id !== id);
-    await saveData(data);
+    await supabase.from('matches').delete().eq('tournament_id', id);
+    const { error } = await supabase.from('tournaments').delete().eq('id', id);
+    if (error) throw error;
   },
 
   // Matches
   getMatches: async () => {
-    const data = await loadData();
-    return data.matches.map(m => {
-      const tournament = data.tournaments.find(t => t.id === m.tournament_id);
-      const teamA = data.teams.find(t => t.id === m.team_a_id);
-      const teamB = data.teams.find(t => t.id === m.team_b_id);
+    const { data: matches, error } = await supabase.from('matches').select('*');
+    if (error) throw error;
+    
+    const { data: tournaments } = await supabase.from('tournaments').select('id, fullname, logotype');
+    const { data: teams } = await supabase.from('teams').select('id, fullname, shortname, logotype');
+
+    return matches.map(m => {
+      const tournament = tournaments?.find(t => t.id === m.tournament_id);
+      const teamA = teams?.find(t => t.id === m.team_a_id);
+      const teamB = teams?.find(t => t.id === m.team_b_id);
       return {
         ...m,
         tournament_name: tournament?.fullname,
@@ -282,19 +234,20 @@ export const storage = {
     });
   },
   getMatch: async (id: string) => {
-    const data = await loadData();
-    const m = data.matches.find(m => m.id === id);
-    if (!m) return null;
+    const { data: m, error } = await supabase.from('matches').select('*').eq('id', id).single();
+    if (error || !m) return null;
     
-    const tournament = data.tournaments.find(t => t.id === m.tournament_id);
-    const teamA = data.teams.find(t => t.id === m.team_a_id);
-    const teamB = data.teams.find(t => t.id === m.team_b_id);
+    const { data: tournament } = await supabase.from('tournaments').select('*').eq('id', m.tournament_id).single();
+    const { data: teamA } = await supabase.from('teams').select('*').eq('id', m.team_a_id).single();
+    const { data: teamB } = await supabase.from('teams').select('*').eq('id', m.team_b_id).single();
     
-    // Get athletes and committee for teams
-    const teamAAthletes = data.athletes.filter(a => a.team_id === teamA?.id);
-    const teamBAthletes = data.athletes.filter(a => a.team_id === teamB?.id);
-    const teamACommittee = data.committee.filter(c => c.team_id === teamA?.id);
-    const teamBCommittee = data.committee.filter(c => c.team_id === teamB?.id);
+    const { data: athletes } = await supabase.from('athletes').select('*').in('team_id', [m.team_a_id, m.team_b_id]);
+    const { data: committee } = await supabase.from('committee').select('*').in('team_id', [m.team_a_id, m.team_b_id]);
+
+    const teamAAthletes = athletes?.filter(a => a.team_id === teamA?.id) || [];
+    const teamBAthletes = athletes?.filter(a => a.team_id === teamB?.id) || [];
+    const teamACommittee = committee?.filter(c => c.team_id === teamA?.id) || [];
+    const teamBCommittee = committee?.filter(c => c.team_id === teamB?.id) || [];
 
     return {
         ...m,
@@ -312,10 +265,11 @@ export const storage = {
     };
   },
   createMatch: async (matchData: any) => {
-    const data = await loadData();
-    // Find max game number to avoid collisions
+    const user_id = await getUserId();
+    const { data: matches } = await supabase.from('matches').select('id');
+    
     let maxNum = 0;
-    data.matches.forEach(m => {
+    (matches || []).forEach(m => {
         const match = m.id.match(/GAME (\d+)/);
         if (match) {
             const num = parseInt(match[1]);
@@ -324,49 +278,65 @@ export const storage = {
     });
     const nextNum = maxNum + 1;
     const id = `GAME ${nextNum}`;
-    const newMatch = { ...matchData, id, code: id };
-    data.matches.push(newMatch);
-    await saveData(data);
-    return newMatch;
+    const newMatch = { ...matchData, id, code: id, user_id };
+    
+    const { data, error } = await supabase.from('matches').insert([newMatch]).select().single();
+    if (error) throw error;
+    return data;
   },
   updateMatch: async (id: string, updates: Partial<Match>) => {
-    const data = await loadData();
-    const index = data.matches.findIndex(m => m.id === id);
-    if (index === -1) throw new Error('Match not found');
-    data.matches[index] = { ...data.matches[index], ...updates };
-    await saveData(data);
-    return data.matches[index];
+    const { data, error } = await supabase.from('matches').update(updates).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
   },
   deleteMatch: async (id: string) => {
-    const data = await loadData();
-    data.matches = data.matches.filter(m => m.id !== id);
-    await saveData(data);
+    const { error } = await supabase.from('matches').delete().eq('id', id);
+    if (error) throw error;
   },
 
   // Backup/Restore
-  getBackup: async () => await loadData(),
+  getBackup: async () => {
+    const { data: teams } = await supabase.from('teams').select('*');
+    const { data: athletes } = await supabase.from('athletes').select('*');
+    const { data: committee } = await supabase.from('committee').select('*');
+    const { data: tournaments } = await supabase.from('tournaments').select('*');
+    const { data: matches } = await supabase.from('matches').select('*');
+    
+    return {
+      teams: teams || [],
+      athletes: athletes || [],
+      committee: committee || [],
+      tournaments: tournaments || [],
+      matches: matches || []
+    };
+  },
   restoreBackup: async (backupData: AppData) => {
-      await saveData(backupData);
+    const user_id = await getUserId();
+    
+    if (backupData.teams?.length) {
+      const teams = backupData.teams.map(t => ({ ...t, user_id }));
+      await supabase.from('teams').upsert(teams);
+    }
+    if (backupData.athletes?.length) {
+      const athletes = backupData.athletes.map(a => ({ ...a, user_id }));
+      await supabase.from('athletes').upsert(athletes);
+    }
+    if (backupData.committee?.length) {
+      const committee = backupData.committee.map(c => ({ ...c, user_id }));
+      await supabase.from('committee').upsert(committee);
+    }
+    if (backupData.tournaments?.length) {
+      const tournaments = backupData.tournaments.map(t => ({ ...t, user_id }));
+      await supabase.from('tournaments').upsert(tournaments);
+    }
+    if (backupData.matches?.length) {
+      const matches = backupData.matches.map(m => ({ ...m, user_id }));
+      await supabase.from('matches').upsert(matches);
+    }
   },
   migrateData: async () => {
-    try {
-      const oldData = localStorage.getItem(STORAGE_KEY);
-      if (oldData) {
-        const parsed = JSON.parse(oldData) as AppData;
-        const merged = {
-          teams: parsed.teams || [],
-          athletes: parsed.athletes || [],
-          committee: parsed.committee || [],
-          tournaments: parsed.tournaments || [],
-          matches: parsed.matches || []
-        };
-        await localforage.setItem(STORAGE_KEY, merged);
-        console.log('Data successfully migrated from localStorage to localforage');
-        return true;
-      }
-    } catch (error) {
-      console.error('Error during data migration:', error);
-    }
+    // Migration from localforage is no longer handled here automatically
+    // It can be done via the import button if the user exports first
     return false;
   }
 };
