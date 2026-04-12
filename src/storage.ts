@@ -312,26 +312,62 @@ export const storage = {
   },
   restoreBackup: async (backupData: AppData) => {
     const user_id = await getUserId();
+    if (!user_id) throw new Error("User not authenticated");
     
+    // 1. Insert Teams (Parent)
     if (backupData.teams?.length) {
-      const teams = backupData.teams.map(t => ({ ...t, user_id }));
-      await supabase.from('teams').upsert(teams);
+      const teams = backupData.teams.map(t => ({ 
+        ...t, 
+        shortname: t.shortname || t.fullname?.substring(0, 3).toUpperCase() || 'UNK',
+        user_id 
+      }));
+      const { error } = await supabase.from('teams').upsert(teams);
+      if (error) throw new Error(`Teams import error: ${error.message}`);
     }
+
+    // 2. Insert Tournaments (Parent)
+    if (backupData.tournaments?.length) {
+      const tournaments = backupData.tournaments.map(t => ({ 
+        ...t, 
+        shortname: t.shortname || t.fullname?.substring(0, 3).toUpperCase() || 'UNK',
+        season: t.season || new Date().getFullYear().toString(),
+        main_color: t.main_color || '#f97316',
+        user_id 
+      }));
+      const { error } = await supabase.from('tournaments').upsert(tournaments);
+      if (error) throw new Error(`Tournaments import error: ${error.message}`);
+    }
+
+    // 3. Insert Athletes (Child of Teams)
     if (backupData.athletes?.length) {
-      const athletes = backupData.athletes.map(a => ({ ...a, user_id }));
-      await supabase.from('athletes').upsert(athletes);
+      const athletes = backupData.athletes.map(a => ({ 
+        ...a, 
+        date_of_birth: a.date_of_birth || '2000-01-01',
+        user_id 
+      }));
+      const { error } = await supabase.from('athletes').upsert(athletes);
+      if (error) throw new Error(`Athletes import error: ${error.message}`);
     }
+
+    // 4. Insert Committee (Child of Teams)
     if (backupData.committee?.length) {
       const committee = backupData.committee.map(c => ({ ...c, user_id }));
-      await supabase.from('committee').upsert(committee);
+      const { error } = await supabase.from('committee').upsert(committee);
+      if (error) throw new Error(`Committee import error: ${error.message}`);
     }
-    if (backupData.tournaments?.length) {
-      const tournaments = backupData.tournaments.map(t => ({ ...t, user_id }));
-      await supabase.from('tournaments').upsert(tournaments);
-    }
+
+    // 5. Insert Matches (Child of Tournaments and Teams)
     if (backupData.matches?.length) {
-      const matches = backupData.matches.map(m => ({ ...m, user_id }));
-      await supabase.from('matches').upsert(matches);
+      const matches = backupData.matches.map(m => ({ 
+        ...m, 
+        code: m.code || m.id,
+        phase: m.phase || 'Group Stage',
+        round: m.round || '1',
+        date: m.date || new Date().toISOString().split('T')[0],
+        user_id 
+      }));
+      const { error } = await supabase.from('matches').upsert(matches);
+      if (error) throw new Error(`Matches import error: ${error.message}`);
     }
   },
   migrateData: async () => {
