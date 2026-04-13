@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
 import { LogIn, Trophy } from 'lucide-react';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function Login() {
+  usePageTitle('Login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');

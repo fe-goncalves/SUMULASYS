@@ -1,8 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { Download, Upload, AlertTriangle, CheckCircle, FileJson } from 'lucide-react';
 import { exportData, importData } from '../api';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function Settings() {
+  usePageTitle('Settings');
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);

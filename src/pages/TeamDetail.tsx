@@ -6,8 +6,10 @@ import { fetchTeam, updateTeam, createAthlete, updateAthlete, deleteAthlete, cre
 import ConfirmationModal from '../components/ConfirmationModal';
 import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
 import { useDominantColor } from '../hooks/useDominantColor';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function TeamDetail() {
+  usePageTitle('Team Detail');
   const { id } = useParams();
   const navigate = useNavigate();
   const [team, setTeam] = useState(null);

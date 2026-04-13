@@ -4,8 +4,10 @@ import { useForm } from 'react-hook-form';
 import { fetchCommittee, createCommittee, updateCommittee, deleteCommittee, fetchTeams } from '../api';
 import ConfirmationModal from '../components/ConfirmationModal';
 import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function Committee() {
+  usePageTitle('Committee');
   const [committee, setCommittee] = useState([]);
   const [teams, setTeams] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);

@@ -3,8 +3,10 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Trophy, Calendar, ArrowRight, Edit, Trash } from 'lucide-react';
 import { fetchTournament } from '../api';
 import { motion } from 'framer-motion';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function TournamentDetail() {
+  usePageTitle('Tournament Detail');
   const { id } = useParams();
   const navigate = useNavigate();
   const [tournament, setTournament] = useState<any>(null);

@@ -7,8 +7,10 @@ import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
 import { motion } from 'framer-motion';
 import TeamCard from '../components/TeamCard';
 import { getDominantColor } from '../utils/colorExtractor';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function Teams() {
+  usePageTitle('Teams');
   const [teams, setTeams] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);

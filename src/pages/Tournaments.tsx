@@ -6,8 +6,10 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function Tournaments() {
+  usePageTitle('Tournaments');
   const [tournaments, setTournaments] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTournament, setEditingTournament] = useState(null);

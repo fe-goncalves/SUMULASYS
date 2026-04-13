@@ -4,8 +4,10 @@ import { useForm } from 'react-hook-form';
 import { fetchAthletes, createAthlete, updateAthlete, deleteAthlete, fetchTeams } from '../api';
 import ConfirmationModal from '../components/ConfirmationModal';
 import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function Athletes() {
+  usePageTitle('Athletes');
   const [athletes, setAthletes] = useState([]);
   const [teams, setTeams] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);

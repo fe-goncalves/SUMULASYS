@@ -6,8 +6,10 @@ import { useForm } from 'react-hook-form';
 import { fetchMatches, createMatch, fetchTeams, fetchTournaments, deleteMatch, updateMatch, fetchMatch } from '../api';
 import { generateMatchesPDF } from '../utils/pdfGenerator';
 import ConfirmationModal from '../components/ConfirmationModal';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function Matches() {
+  usePageTitle('Matches');
   const [matches, setMatches] = useState([]);
   const [teams, setTeams] = useState([]);
   const [tournaments, setTournaments] = useState([]);

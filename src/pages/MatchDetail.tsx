@@ -5,8 +5,10 @@ import { useForm } from 'react-hook-form';
 import { fetchMatch, updateMatch, deleteMatch, fetchTeams, fetchTournaments } from '../api';
 import { generateMatchesPDF } from '../utils/pdfGenerator';
 import ConfirmationModal from '../components/ConfirmationModal';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function MatchDetail() {
+  usePageTitle('Match Detail');
   const { id } = useParams();
   const navigate = useNavigate();
   const [match, setMatch] = useState<any>(null);
