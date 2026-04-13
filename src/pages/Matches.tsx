@@ -32,9 +32,13 @@ export default function Matches() {
       fetchTeams(),
       fetchTournaments()
     ]);
+    
+    const sortedTeams = teamsData.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
+    const sortedTournaments = tournamentsData.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
+    
     setMatches(matchesData);
-    setTeams(teamsData);
-    setTournaments(tournamentsData);
+    setTeams(sortedTeams);
+    setTournaments(sortedTournaments);
   }
 
   const filteredMatches = matches

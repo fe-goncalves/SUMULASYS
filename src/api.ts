@@ -49,16 +49,19 @@ export async function fetchAthletes() {
     .from('athletes')
     .select(`
       *,
-      team:teams(fullname, shortname, logotype)
+      teams(fullname, shortname, logotype)
     `);
   if (error) throw error;
   
-  return data.map(a => ({
-    ...a,
-    team_name: a.team?.fullname,
-    team_shortname: a.team?.shortname,
-    team_logotype: a.team?.logotype
-  }));
+  return data.map(a => {
+    const teamData = Array.isArray(a.teams) ? a.teams[0] : a.teams;
+    return {
+      ...a,
+      team_name: teamData?.fullname,
+      team_shortname: teamData?.shortname,
+      team_logotype: teamData?.logotype
+    };
+  });
 }
 
 export async function createAthlete(data: any) {
@@ -85,16 +88,19 @@ export async function fetchCommittee() {
     .from('committee')
     .select(`
       *,
-      team:teams(fullname, shortname, logotype)
+      teams(fullname, shortname, logotype)
     `);
   if (error) throw error;
   
-  return data.map(c => ({
-    ...c,
-    team_name: c.team?.fullname,
-    team_shortname: c.team?.shortname,
-    team_logotype: c.team?.logotype
-  }));
+  return data.map(c => {
+    const teamData = Array.isArray(c.teams) ? c.teams[0] : c.teams;
+    return {
+      ...c,
+      team_name: teamData?.fullname,
+      team_shortname: teamData?.shortname,
+      team_logotype: teamData?.logotype
+    };
+  });
 }
 
 export async function createCommittee(data: any) {
@@ -179,17 +185,23 @@ export async function fetchMatches() {
     `);
   if (error) throw error;
 
-  return data.map(m => ({
-    ...m,
-    tournament_name: m.tournament?.fullname,
-    tournament_logotype: m.tournament?.logotype,
-    team_a_name: m.team_a?.fullname,
-    team_a_shortname: m.team_a?.shortname,
-    team_a_logotype: m.team_a?.logotype,
-    team_b_name: m.team_b?.fullname,
-    team_b_shortname: m.team_b?.shortname,
-    team_b_logotype: m.team_b?.logotype,
-  }));
+  return data.map(m => {
+    const tournamentData = Array.isArray(m.tournament) ? m.tournament[0] : m.tournament;
+    const teamAData = Array.isArray(m.team_a) ? m.team_a[0] : m.team_a;
+    const teamBData = Array.isArray(m.team_b) ? m.team_b[0] : m.team_b;
+    
+    return {
+      ...m,
+      tournament_name: tournamentData?.fullname,
+      tournament_logotype: tournamentData?.logotype,
+      team_a_name: teamAData?.fullname,
+      team_a_shortname: teamAData?.shortname,
+      team_a_logotype: teamAData?.logotype,
+      team_b_name: teamBData?.fullname,
+      team_b_shortname: teamBData?.shortname,
+      team_b_logotype: teamBData?.logotype,
+    };
+  });
 }
 
 export async function fetchMatch(id: string) {
@@ -290,12 +302,54 @@ export async function importData(data: any): Promise<{ success: boolean; error?:
   try {
     const user_id = await getUserId();
     
-    // Add user_id to all records
-    const teams = (data.teams || []).map((t: any) => ({ ...t, user_id }));
-    const athletes = (data.athletes || []).map((a: any) => ({ ...a, user_id }));
-    const committee = (data.committee || []).map((c: any) => ({ ...c, user_id }));
-    const tournaments = (data.tournaments || []).map((t: any) => ({ ...t, user_id }));
-    const matches = (data.matches || []).map((m: any) => ({ ...m, user_id }));
+    // Add user_id to all records and sanitize foreign keys and strip extra fields
+    const teams = (data.teams || []).map((t: any) => ({ 
+      id: t.id,
+      fullname: t.fullname,
+      shortname: t.shortname,
+      logotype: t.logotype || null,
+      main_color: t.main_color || '#f97316',
+      user_id
+    }));
+    
+    const athletes = (data.athletes || []).map((a: any) => ({ 
+      id: a.id,
+      fullname: a.fullname,
+      surname: a.surname,
+      date_of_birth: a.date_of_birth,
+      team_id: a.team_id === "" ? null : a.team_id,
+      user_id
+    }));
+    
+    const committee = (data.committee || []).map((c: any) => ({ 
+      id: c.id,
+      fullname: c.fullname,
+      surname: c.surname,
+      team_id: c.team_id === "" ? null : c.team_id,
+      user_id
+    }));
+    
+    const tournaments = (data.tournaments || []).map((t: any) => ({ 
+      id: t.id,
+      fullname: t.fullname,
+      shortname: t.shortname,
+      season: t.season,
+      logotype: t.logotype || null,
+      main_color: t.main_color || '#f97316',
+      user_id
+    }));
+    
+    const matches = (data.matches || []).map((m: any) => ({ 
+      id: m.id,
+      code: m.code || m.id,
+      tournament_id: m.tournament_id === "" ? null : m.tournament_id,
+      team_a_id: m.team_a_id === "" ? null : m.team_a_id,
+      team_b_id: m.team_b_id === "" ? null : m.team_b_id,
+      phase: m.phase,
+      round: m.round,
+      date: m.date,
+      user_id
+    }));
 
     // Insert in order to respect foreign keys
     if (teams.length > 0) {

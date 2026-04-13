@@ -36,9 +36,15 @@ export default function TeamDetail() {
 
   async function loadTeam() {
     const data = await fetchTeam(id);
-    setTeam(data);
-    // Pre-fill edit form
     if (data) {
+        if (data.athletes) {
+            data.athletes.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
+        }
+        if (data.committee) {
+            data.committee.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
+        }
+        setTeam(data);
+        // Pre-fill edit form
         setValueEdit('fullname', data.fullname);
         setValueEdit('shortname', data.shortname);
     }
@@ -46,7 +52,8 @@ export default function TeamDetail() {
 
   async function loadAllTeams() {
       const data = await fetchTeams();
-      setAllTeams(data);
+      const sortedTeams = data.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
+      setAllTeams(sortedTeams);
   }
 
   function openAddModal() {

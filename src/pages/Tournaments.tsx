@@ -24,9 +24,14 @@ export default function Tournaments() {
   }, []);
 
   async function loadTournaments() {
-    const data = await fetchTournaments();
-    const sortedTournaments = data.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
-    setTournaments(sortedTournaments);
+    try {
+      const data = await fetchTournaments();
+      const sortedTournaments = data.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
+      setTournaments(sortedTournaments);
+    } catch (error: any) {
+      console.error("Failed to load tournaments:", error);
+      alert("Failed to load tournaments: " + error.message);
+    }
   }
 
   function openAddModal() {

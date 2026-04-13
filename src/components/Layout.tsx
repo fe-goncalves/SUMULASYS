@@ -55,12 +55,16 @@ export default function Layout() {
     reader.onload = async (e) => {
       try {
         const json = JSON.parse(e.target?.result as string);
-        await importData(json);
-        alert('Data imported successfully! The page will reload.');
-        window.location.reload();
-      } catch (error) {
+        const result = await importData(json);
+        if (result.success) {
+          alert('Data imported successfully! The page will reload.');
+          window.location.reload();
+        } else {
+          alert('Failed to import data: ' + result.error);
+        }
+      } catch (error: any) {
         console.error('Import failed:', error);
-        alert('Failed to import data. Please ensure the file is a valid backup JSON.');
+        alert('Failed to import data. Please ensure the file is a valid backup JSON. Error: ' + error.message);
       }
     };
     reader.readAsText(importFile);

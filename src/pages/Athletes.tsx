@@ -24,13 +24,19 @@ export default function Athletes() {
   }, []);
 
   async function loadData() {
-    const [athletesData, teamsData] = await Promise.all([
-      fetchAthletes(),
-      fetchTeams()
-    ]);
-    const sortedAthletes = athletesData.sort((a: any, b: any) => (a.surname || a.fullname || '').localeCompare(b.surname || b.fullname || ''));
-    setAthletes(sortedAthletes);
-    setTeams(teamsData);
+    try {
+      const [athletesData, teamsData] = await Promise.all([
+        fetchAthletes(),
+        fetchTeams()
+      ]);
+      const sortedAthletes = athletesData.sort((a: any, b: any) => (a.surname || a.fullname || '').localeCompare(b.surname || b.fullname || ''));
+      const sortedTeams = teamsData.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
+      setAthletes(sortedAthletes);
+      setTeams(sortedTeams);
+    } catch (error: any) {
+      console.error("Failed to load athletes:", error);
+      alert("Failed to load athletes: " + error.message);
+    }
   }
 
   function openAddModal() {
