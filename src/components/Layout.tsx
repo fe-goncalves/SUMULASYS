@@ -12,6 +12,7 @@ export default function Layout() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   const navItems = [
     { name: 'TEAMS', path: '/teams' },
@@ -51,6 +52,7 @@ export default function Layout() {
   async function confirmImport() {
     if (!importFile) return;
 
+    setIsImporting(true);
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
@@ -65,6 +67,9 @@ export default function Layout() {
       } catch (error: any) {
         console.error('Import failed:', error);
         alert('Failed to import data. Please ensure the file is a valid backup JSON. Error: ' + error.message);
+      } finally {
+        setIsImporting(false);
+        setIsImportModalOpen(false);
       }
     };
     reader.readAsText(importFile);
@@ -82,6 +87,15 @@ export default function Layout() {
           <Outlet />
         </div>
       </div>
+
+      {/* Loading Overlay */}
+      {isImporting && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center z-[100]">
+          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <h2 className="text-2xl font-bold text-white mb-2">Importing Data...</h2>
+          <p className="text-gray-400">Please wait, this might take a few moments.</p>
+        </div>
+      )}
 
       {/* Bottom Navigation - Glass Effect */}
       <div className="fixed bottom-0 left-0 w-full border-t border-white/5 bg-dark-900/80 backdrop-blur-xl z-50 transition-all duration-300">

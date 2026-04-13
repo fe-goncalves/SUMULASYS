@@ -56,13 +56,28 @@ export default function Athletes() {
     setValue('id', item.id);
     setValue('fullname', item.fullname);
     setValue('surname', item.surname);
-    setValue('date_of_birth', item.date_of_birth);
+    
+    if (item.date_of_birth) {
+      const [year, month, day] = item.date_of_birth.split('-');
+      setValue('date_of_birth', `${day}/${month}/${year}`);
+    } else {
+      setValue('date_of_birth', '');
+    }
+    
     setValue('team_id', item.team_id);
     setIsModalOpen(true);
   }
 
   async function onSubmit(data) {
-    setPendingData(data);
+    let formattedData = { ...data };
+    if (data.date_of_birth) {
+      const parts = data.date_of_birth.split('/');
+      if (parts.length === 3) {
+        const [day, month, year] = parts;
+        formattedData.date_of_birth = `${year}-${month}-${day}`;
+      }
+    }
+    setPendingData(formattedData);
     setSummaryModalOpen(true);
   }
 
@@ -224,7 +239,15 @@ export default function Athletes() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1.5">Date of Birth</label>
-                  <input type="date" {...register('date_of_birth', { required: true })} className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50" />
+                  <input 
+                    type="text" 
+                    placeholder="DD/MM/YYYY"
+                    {...register('date_of_birth', { 
+                        required: true,
+                        pattern: /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[012])\/(19|20)\d\d$/
+                    })} 
+                    className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50" 
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1.5">Team</label>

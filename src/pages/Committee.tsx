@@ -29,8 +29,9 @@ export default function Committee() {
       fetchTeams()
     ]);
     const sortedCommittee = committeeData.sort((a: any, b: any) => (a.surname || a.fullname || '').localeCompare(b.surname || b.fullname || ''));
+    const sortedTeams = teamsData.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
     setCommittee(sortedCommittee);
-    setTeams(teamsData);
+    setTeams(sortedTeams);
   }
 
   function openAddModal() {
@@ -51,12 +52,28 @@ export default function Committee() {
     setValue('fullname', item.fullname);
     setValue('surname', item.surname);
     setValue('role', item.role);
+    
+    if (item.date_of_birth) {
+      const [year, month, day] = item.date_of_birth.split('-');
+      setValue('date_of_birth', `${day}/${month}/${year}`);
+    } else {
+      setValue('date_of_birth', '');
+    }
+    
     setValue('team_id', item.team_id);
     setIsModalOpen(true);
   }
 
   async function onSubmit(data) {
-    setPendingData(data);
+    let formattedData = { ...data };
+    if (data.date_of_birth) {
+      const parts = data.date_of_birth.split('/');
+      if (parts.length === 3) {
+        const [day, month, year] = parts;
+        formattedData.date_of_birth = `${year}-${month}-${day}`;
+      }
+    }
+    setPendingData(formattedData);
     setSummaryModalOpen(true);
   }
 
@@ -140,6 +157,7 @@ export default function Committee() {
                 <th className="px-6 py-4">Team</th>
                 <th className="px-6 py-4">Surname</th>
                 <th className="px-6 py-4">Full Name</th>
+                <th className="px-6 py-4">Date of Birth</th>
                 <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
             </thead>
@@ -162,6 +180,12 @@ export default function Committee() {
                     </td>
                     <td className="px-6 py-4 font-bold text-white">{member.surname}</td>
                     <td className="px-6 py-4 text-gray-300">{member.fullname}</td>
+                    <td className="px-6 py-4 text-gray-400 text-sm">
+                      {member.date_of_birth ? (() => {
+                        const [year, month, day] = member.date_of_birth.split('-');
+                        return `${day}/${month}/${year}`;
+                      })() : ''}
+                    </td>
                     <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={() => openEditModal(member)} className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors">
                         <Edit size={16} />
@@ -207,6 +231,18 @@ export default function Committee() {
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1.5">RG (ID - Numbers Only)</label>
                   <input {...register('id', { required: true, pattern: /^[0-9]+$/ })} className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50 font-mono" placeholder="123456789" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1.5">Date of Birth</label>
+                  <input 
+                    type="text" 
+                    placeholder="DD/MM/YYYY"
+                    {...register('date_of_birth', { 
+                        required: true,
+                        pattern: /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[012])\/(19|20)\d\d$/
+                    })} 
+                    className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50" 
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1.5">Team</label>
