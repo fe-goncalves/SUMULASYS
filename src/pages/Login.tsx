@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
-import { LogIn, UserPlus, Trophy } from 'lucide-react';
+import { LogIn, Trophy } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -15,15 +14,8 @@ export default function Login() {
     setError('');
 
     try {
-      if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
-        alert('Cadastro realizado com sucesso! Você já pode fazer login.');
-        setIsLogin(true);
-      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro durante a autenticação.');
     } finally {
@@ -94,23 +86,11 @@ export default function Login() {
                   disabled={loading}
                   className="group relative w-full inline-flex items-center justify-center rounded-2xl bg-orange-500 px-4 py-3 text-sm font-semibold text-black transition duration-200 hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {loading ? 'Aguarde...' : isLogin ? (
+                  {loading ? 'Aguarde...' : (
                     <><LogIn className="w-5 h-5 mr-2" /> Entrar</>
-                  ) : (
-                    <><UserPlus className="w-5 h-5 mr-2" /> Cadastrar</>
                   )}
                 </button>
               </form>
-
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={() => setIsLogin(!isLogin)}
-                  className="text-sm text-orange-300 transition hover:text-orange-200"
-                >
-                  {isLogin ? 'Não tem uma conta? Cadastre-se' : 'Já tem uma conta? Entre'}
-                </button>
-              </div>
             </div>
           </div>
         </div>
