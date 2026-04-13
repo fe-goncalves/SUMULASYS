@@ -42,7 +42,7 @@ export default function Login() {
                 </div>
                 <div>
                   <h2 className="text-3xl font-extrabold tracking-tight text-white">
-                    {isLogin ? 'Entrar no Sistema' : 'Criar Nova Conta'}
+                      Entrar no Sistema
                   </h2>
                   <p className="mt-2 text-sm text-gray-400">
                     Acesse o painel principal para gerenciar equipes, atletas e partidas.
