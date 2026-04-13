@@ -8,7 +8,6 @@ import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
 export default function Committee() {
   const [committee, setCommittee] = useState([]);
   const [teams, setTeams] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -25,20 +24,13 @@ export default function Committee() {
   }, []);
 
   async function loadData() {
-    setIsLoading(true);
-    try {
-      const [committeeData, teamsData] = await Promise.all([
-        fetchCommittee(),
-        fetchTeams()
-      ]);
-      const sortedCommittee = (committeeData || []).sort((a: any, b: any) => (a.surname || a.fullname || '').localeCompare(b.surname || b.fullname || ''));
-      setCommittee(sortedCommittee);
-      setTeams(teamsData || []);
-    } catch (error) {
-      console.error("Failed to load data:", error);
-    } finally {
-      setIsLoading(false);
-    }
+    const [committeeData, teamsData] = await Promise.all([
+      fetchCommittee(),
+      fetchTeams()
+    ]);
+    const sortedCommittee = committeeData.sort((a: any, b: any) => (a.surname || a.fullname || '').localeCompare(b.surname || b.fullname || ''));
+    setCommittee(sortedCommittee);
+    setTeams(teamsData);
   }
 
   function openAddModal() {
@@ -112,14 +104,6 @@ export default function Committee() {
     member.id.includes(searchTerm) ||
     (member.team_name && member.team_name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-8">

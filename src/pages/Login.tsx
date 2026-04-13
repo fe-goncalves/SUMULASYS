@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../supabase';
+import { LogIn, UserPlus } from 'lucide-react';
 
-export default function Login({ onLogin }: { onLogin: () => void }) {
+export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLogin, setIsLogin] = useState(true);
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
+    setError('');
 
     try {
       if (isLogin) {
@@ -20,76 +21,71 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
       } else {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        alert('Registration successful! You can now log in.');
+        alert('Cadastro realizado com sucesso! Você já pode fazer login.');
         setIsLogin(true);
       }
-      onLogin();
     } catch (err: any) {
-      setError(err.message || 'An error occurred during authentication.');
+      setError(err.message || 'Ocorreu um erro durante a autenticação.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-dark-950 flex items-center justify-center p-4">
-      <div className="glass-panel p-8 rounded-2xl w-full max-w-md shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-orange-600" />
-        
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white tracking-tight mb-2">SUMULASYS</h1>
-          <p className="text-gray-400">Manage your tournaments and matches</p>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            {isLogin ? 'Entrar no Sistema' : 'Criar Nova Conta'}
+          </h2>
         </div>
-
-        <h2 className="text-xl font-bold mb-6 text-white text-center">
-          {isLogin ? 'Sign In' : 'Create Account'}
-        </h2>
-
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-3 rounded-xl mb-6 text-sm text-center">
-            {error}
+        <form className="mt-8 space-y-6" onSubmit={handleAuth}>
+          <div className="rounded-md shadow-sm -space-y-px">
+            <div>
+              <input
+                type="email"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                placeholder="E-mail"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <input
+                type="password"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                placeholder="Senha"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
           </div>
-        )}
 
-        <form onSubmit={handleAuth} className="space-y-5">
+          {error && <div className="text-red-500 text-sm text-center">{error}</div>}
+
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1.5">Email</label>
-            <input 
-              type="email" 
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50" 
-              placeholder="your@email.com"
-            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            >
+              {loading ? 'Aguarde...' : isLogin ? (
+                <><LogIn className="w-5 h-5 mr-2" /> Entrar</>
+              ) : (
+                <><UserPlus className="w-5 h-5 mr-2" /> Cadastrar</>
+              )}
+            </button>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1.5">Password</label>
-            <input 
-              type="password" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50" 
-              placeholder="••••••••"
-            />
-          </div>
-
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="w-full py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-xl transition-all shadow-lg shadow-orange-600/20 font-medium disabled:opacity-50"
-          >
-            {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Sign Up')}
-          </button>
         </form>
 
-        <div className="mt-6 text-center">
-          <button 
+        <div className="text-center mt-4">
+          <button
             onClick={() => setIsLogin(!isLogin)}
-            className="text-sm text-gray-400 hover:text-white transition-colors"
+            className="text-sm text-blue-600 hover:text-blue-500"
           >
-            {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+            {isLogin ? 'Não tem uma conta? Cadastre-se' : 'Já tem uma conta? Entre'}
           </button>
         </div>
       </div>

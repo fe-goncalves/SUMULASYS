@@ -1,96 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Download, Upload, AlertTriangle, CheckCircle, FileJson, Database, RefreshCw } from 'lucide-react';
-import { exportData, importData, fetchTeams, fetchTournaments, updateTeam, updateTournament } from '../api';
-import { compressImage } from '../utils/imageCompressor';
+import React, { useState, useRef } from 'react';
+import { Download, Upload, AlertTriangle, CheckCircle, FileJson } from 'lucide-react';
+import { exportData, importData } from '../api';
 
 export default function Settings() {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [isOptimizing, setIsOptimizing] = useState(false);
-  const [storageUsage, setStorageUsage] = useState({ used: 0, total: 5 * 1024 * 1024, percentage: 0 });
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    calculateStorage();
-  }, []);
-
-  const calculateStorage = () => {
-    let total = 0;
-    for (let x in localStorage) {
-      if (localStorage.hasOwnProperty(x)) {
-        total += ((localStorage[x].length + x.length) * 2);
-      }
-    }
-    const totalAllowed = 5 * 1024 * 1024; // ~5MB
-    setStorageUsage({
-      used: total,
-      total: totalAllowed,
-      percentage: Math.min(100, Math.round((total / totalAllowed) * 100))
-    });
-  };
-
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const handleOptimizeStorage = async () => {
-    setIsOptimizing(true);
-    setMessage(null);
-    try {
-      let optimizedCount = 0;
-      
-      // Helper to convert base64 to File
-      const dataURLtoFile = (dataurl: string, filename: string) => {
-        let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)?.[1],
-            bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
-        while(n--){
-            u8arr[n] = bstr.charCodeAt(n);
-        }
-        return new File([u8arr], filename, {type:mime});
-      };
-
-      const teams = await fetchTeams();
-      for (const team of teams) {
-        if (team.logotype && team.logotype.length > 50000) { // Only compress if larger than ~50KB
-          try {
-            const file = dataURLtoFile(team.logotype, 'logo.png');
-            const compressed = await compressImage(file, 300, 300);
-            if (compressed.length < team.logotype.length) {
-              await updateTeam(team.id, { logotype: compressed });
-              optimizedCount++;
-            }
-          } catch (e) { console.error("Failed to compress team logo", e); }
-        }
-      }
-
-      const tournaments = await fetchTournaments();
-      for (const tournament of tournaments) {
-        if (tournament.logotype && tournament.logotype.length > 50000) {
-          try {
-            const file = dataURLtoFile(tournament.logotype, 'logo.png');
-            const compressed = await compressImage(file, 300, 300);
-            if (compressed.length < tournament.logotype.length) {
-              await updateTournament(tournament.id, { logotype: compressed });
-              optimizedCount++;
-            }
-          } catch (e) { console.error("Failed to compress tournament logo", e); }
-        }
-      }
-
-      calculateStorage();
-      setMessage({ type: 'success', text: `Storage optimized! Compressed ${optimizedCount} images.` });
-    } catch (error: any) {
-      console.error('Optimization failed:', error);
-      setMessage({ type: 'error', text: `Optimization failed: ${error.message}` });
-    } finally {
-      setIsOptimizing(false);
-    }
-  };
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -167,52 +83,6 @@ export default function Settings() {
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
-        {/* Storage Optimization Section */}
-        <div className="glass-panel rounded-2xl p-6 border border-white/5 shadow-lg relative overflow-hidden group md:col-span-2">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-purple-600 opacity-50 group-hover:opacity-100 transition-opacity" />
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 border border-purple-500/20 shadow-inner">
-                <Database size={24} />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-white">Storage Optimization</h2>
-                <p className="text-sm text-gray-400">Manage local storage and compress images</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-sm font-medium text-white">{formatBytes(storageUsage.used)} / {formatBytes(storageUsage.total)}</p>
-              <p className="text-xs text-gray-400">{storageUsage.percentage}% Used</p>
-            </div>
-          </div>
-          
-          <div className="w-full bg-dark-900 rounded-full h-2.5 mb-6 overflow-hidden border border-white/5">
-            <div 
-              className={`h-2.5 rounded-full ${storageUsage.percentage > 90 ? 'bg-red-500' : storageUsage.percentage > 70 ? 'bg-orange-500' : 'bg-purple-500'}`} 
-              style={{ width: `${storageUsage.percentage}%` }}
-            ></div>
-          </div>
-
-          <p className="text-gray-400 mb-6 text-sm leading-relaxed">
-            If you are running out of space or encountering "Quota Exceeded" errors, you can optimize your storage. 
-            This will compress all existing team and tournament logos to free up space without losing significant quality.
-          </p>
-          <button
-            onClick={handleOptimizeStorage}
-            disabled={isOptimizing || storageUsage.used === 0}
-            className="w-full bg-purple-600 hover:bg-purple-500 text-white font-medium py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-600/20 border border-purple-500/20"
-          >
-            {isOptimizing ? (
-              <span className="animate-pulse flex items-center gap-2"><RefreshCw size={20} className="animate-spin" /> Optimizing...</span>
-            ) : (
-              <>
-                <RefreshCw size={20} />
-                Compress Existing Images
-              </>
-            )}
-          </button>
-        </div>
-
         {/* Export Section */}
         <div className="glass-panel rounded-2xl p-6 border border-white/5 shadow-lg relative overflow-hidden group">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600 opacity-50 group-hover:opacity-100 transition-opacity" />

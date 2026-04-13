@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 import { Plus, Calendar, ArrowRight, Trash, Edit, Download, CheckSquare, Square, Trophy } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { fetchMatches, createMatch, fetchTeams, fetchTournaments, deleteMatch, updateMatch, fetchMatch } from '../api';
-import { toYMD, toDMY, handleDateMask } from '../utils/dateUtils';
 import { generateMatchesPDF } from '../utils/pdfGenerator';
 import ConfirmationModal from '../components/ConfirmationModal';
 
@@ -12,7 +11,6 @@ export default function Matches() {
   const [matches, setMatches] = useState([]);
   const [teams, setTeams] = useState([]);
   const [tournaments, setTournaments] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMatch, setEditingMatch] = useState(null);
   const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
@@ -20,7 +18,6 @@ export default function Matches() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
   const [filterDate, setFilterDate] = useState('');
-  const [filterDateInput, setFilterDateInput] = useState('');
   const [filterTournament, setFilterTournament] = useState('');
   
   const { register, handleSubmit, reset, setValue } = useForm();
@@ -30,21 +27,14 @@ export default function Matches() {
   }, []);
 
   async function loadData() {
-    setIsLoading(true);
-    try {
-      const [matchesData, teamsData, tournamentsData] = await Promise.all([
-        fetchMatches(),
-        fetchTeams(),
-        fetchTournaments()
-      ]);
-      setMatches(matchesData || []);
-      setTeams(teamsData || []);
-      setTournaments(tournamentsData || []);
-    } catch (error) {
-      console.error("Failed to load data:", error);
-    } finally {
-      setIsLoading(false);
-    }
+    const [matchesData, teamsData, tournamentsData] = await Promise.all([
+      fetchMatches(),
+      fetchTeams(),
+      fetchTournaments()
+    ]);
+    setMatches(matchesData);
+    setTeams(teamsData);
+    setTournaments(tournamentsData);
   }
 
   const filteredMatches = matches
@@ -75,7 +65,7 @@ export default function Matches() {
   function openEditModal(match) {
     setEditingMatch(match);
     setValue('tournament_id', match.tournament_id);
-    setValue('date', toDMY(match.date));
+    setValue('date', match.date);
     setValue('phase', match.phase);
     setValue('round', match.round);
     setValue('team_a_id', match.team_a_id);
@@ -84,14 +74,10 @@ export default function Matches() {
   }
 
   async function onSubmit(data) {
-    const processedData = {
-      ...data,
-      date: toYMD(data.date)
-    };
     if (editingMatch) {
-        await updateMatch(editingMatch.id, processedData);
+        await updateMatch(editingMatch.id, data);
     } else {
-        await createMatch(processedData);
+        await createMatch(data);
     }
     setIsModalOpen(false);
     reset();
@@ -169,14 +155,6 @@ export default function Matches() {
       }
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -187,20 +165,10 @@ export default function Matches() {
         <div className="flex flex-wrap gap-3 items-center">
             <div className="flex gap-2">
               <input 
-                type="text" 
-                placeholder="DD/MM/YYYY"
-                maxLength={10}
-                value={filterDateInput}
-                onChange={(e) => {
-                  const masked = handleDateMask(e);
-                  setFilterDateInput(masked);
-                  if (masked.length === 10) {
-                     setFilterDate(toYMD(masked));
-                  } else if (masked.length === 0) {
-                     setFilterDate('');
-                  }
-                }}
-                className="glass-input rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50 w-32"
+                type="date" 
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                className="glass-input rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50"
               />
               <select 
                 value={filterTournament}
@@ -362,17 +330,7 @@ export default function Matches() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-400 mb-1.5">Date</label>
-                    <input 
-                      type="text" 
-                      placeholder="DD/MM/YYYY"
-                      maxLength={10}
-                      {...register('date', { 
-                        required: true,
-                        pattern: /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[012])\/(19|20)\d\d$/,
-                        onChange: handleDateMask
-                      })} 
-                      className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50" 
-                    />
+                    <input type="date" {...register('date', { required: true })} className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-400 mb-1.5">Phase</label>

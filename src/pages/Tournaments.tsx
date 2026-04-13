@@ -9,7 +9,6 @@ import { Link } from 'react-router-dom';
 
 export default function Tournaments() {
   const [tournaments, setTournaments] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTournament, setEditingTournament] = useState(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -25,16 +24,9 @@ export default function Tournaments() {
   }, []);
 
   async function loadTournaments() {
-    setIsLoading(true);
-    try {
-      const data = await fetchTournaments();
-      const sortedTournaments = (data || []).sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
-      setTournaments(sortedTournaments);
-    } catch (error) {
-      console.error("Failed to load tournaments:", error);
-    } finally {
-      setIsLoading(false);
-    }
+    const data = await fetchTournaments();
+    const sortedTournaments = data.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
+    setTournaments(sortedTournaments);
   }
 
   function openAddModal() {
@@ -128,14 +120,6 @@ export default function Tournaments() {
     }
     setSummaryModalOpen(false);
     setPendingData(null);
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
-      </div>
-    );
   }
 
   return (

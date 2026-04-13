@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Download, Edit, Trash } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { fetchMatch, updateMatch, deleteMatch, fetchTeams, fetchTournaments } from '../api';
-import { toYMD, toDMY, handleDateMask } from '../utils/dateUtils';
 import { generateMatchesPDF } from '../utils/pdfGenerator';
 import ConfirmationModal from '../components/ConfirmationModal';
 
@@ -13,7 +12,6 @@ export default function MatchDetail() {
   const [match, setMatch] = useState<any>(null);
   const [teams, setTeams] = useState([]);
   const [tournaments, setTournaments] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -25,21 +23,14 @@ export default function MatchDetail() {
   }, [id]);
 
   async function loadData() {
-    setIsLoading(true);
-    try {
-      const [matchData, teamsData, tournamentsData] = await Promise.all([
-          fetchMatch(id!),
-          fetchTeams(),
-          fetchTournaments()
-      ]);
-      setMatch(matchData || null);
-      setTeams(teamsData || []);
-      setTournaments(tournamentsData || []);
-    } catch (error) {
-      console.error("Failed to load match data:", error);
-    } finally {
-      setIsLoading(false);
-    }
+    const [matchData, teamsData, tournamentsData] = await Promise.all([
+        fetchMatch(id!),
+        fetchTeams(),
+        fetchTournaments()
+    ]);
+    setMatch(matchData);
+    setTeams(teamsData);
+    setTournaments(tournamentsData);
   }
 
   const generatePDF = () => {
@@ -50,7 +41,7 @@ export default function MatchDetail() {
 
   function openEditModal() {
     setValue('tournament_id', match.tournament_id);
-    setValue('date', toDMY(match.date));
+    setValue('date', match.date);
     setValue('phase', match.phase);
     setValue('round', match.round);
     setValue('team_a_id', match.team_a_id);
@@ -60,11 +51,7 @@ export default function MatchDetail() {
 
   async function onEditSubmit(data) {
     try {
-        const processedData = {
-          ...data,
-          date: toYMD(data.date)
-        };
-        await updateMatch(match.id, processedData);
+        await updateMatch(match.id, data);
         setIsEditModalOpen(false);
         loadData();
     } catch (error) {
@@ -83,15 +70,7 @@ export default function MatchDetail() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
-      </div>
-    );
-  }
-
-  if (!match) return <div className="text-white">Match not found</div>;
+  if (!match) return <div className="text-white">Loading...</div>;
 
   return (
     <div className="space-y-8">
@@ -194,17 +173,7 @@ export default function MatchDetail() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1.5">Date</label>
-                  <input 
-                    type="text" 
-                    placeholder="DD/MM/YYYY"
-                    maxLength={10}
-                    {...register('date', { 
-                      required: true,
-                      pattern: /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[012])\/(19|20)\d\d$/,
-                      onChange: handleDateMask
-                    })} 
-                    className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50" 
-                  />
+                  <input type="date" {...register('date', { required: true })} className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1.5">Phase</label>
