@@ -37,17 +37,17 @@ export default function Athletes() {
       if (!athletesData || !isCacheFresh('athletes')) {
         // Load all athletes, assuming not too many, set high limit
         athletesData = await fetchAthletes(10000, 0);
-        setCacheData('athletes', athletesData);
+        setCacheData('athletes', athletesData || []);
       }
       
       let teamsData = getCacheData('teams');
       if (!teamsData || !isCacheFresh('teams')) {
         teamsData = await fetchTeams();
-        setCacheData('teams', teamsData);
+        setCacheData('teams', teamsData || []);
       }
       
-      const sortedTeams = teamsData.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
-      setAthletes(athletesData);
+      const sortedTeams = (teamsData || []).sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
+      setAthletes(athletesData || []);
       setTeams(sortedTeams);
     } catch (error: any) {
       console.error("Failed to load athletes:", error);
@@ -239,18 +239,6 @@ export default function Athletes() {
                 )}
             </tbody>
             </table>
-            
-            {/* Lazy load trigger */}
-            {hasMore && filteredAthletes.length > 0 && (
-              <div ref={observerTarget} className="p-4 text-center">
-                {loadingMore && (
-                  <div className="flex items-center justify-center gap-2 text-gray-500">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b border-orange-500"></div>
-                    <span>Loading more...</span>
-                  </div>
-                )}
-              </div>
-            )}
         </div>
         )}
       </div>
