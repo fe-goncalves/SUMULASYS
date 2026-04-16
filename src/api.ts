@@ -72,8 +72,7 @@ export async function fetchAthletes(limit: number = 500, offset: number = 0) {
     `)
     .eq('user_id', userId)
     .order('surname', { ascending: true })
-    .limit(limit)
-    .offset(offset);
+    .range(offset, offset + limit - 1);
 
   if (error) throw error;
 
@@ -140,8 +139,7 @@ export async function fetchCommittee(limit: number = 500, offset: number = 0) {
     `)
     .eq('user_id', userId)
     .order('surname', { ascending: true })
-    .limit(limit)
-    .offset(offset);
+    .range(offset, offset + limit - 1);
 
   if (error) throw error;
 
