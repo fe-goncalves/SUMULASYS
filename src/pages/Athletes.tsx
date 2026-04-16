@@ -1,92 +1,59 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit, Trash, Download, Search } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { fetchAthletes, createAthlete, updateAthlete, deleteAthlete, fetchTeams } from '../api';
 import ConfirmationModal from '../components/ConfirmationModal';
 import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
 import { usePageTitle } from '../hooks/usePageTitle';
-
-const ITEMS_PER_PAGE = 100;
+import { useCache } from '../contexts/CacheContext';
 
 export default function Athletes() {
   usePageTitle('Athletes');
   const [athletes, setAthletes] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const observerTarget = useRef<HTMLDivElement>(null);
   
   const [summaryModalOpen, setSummaryModalOpen] = useState(false);
   const [pendingData, setPendingData] = useState<any>(null);
 
   const { register, handleSubmit, reset, setValue } = useForm();
 
+  const { setCacheData, getCacheData, isCacheFresh, invalidateCache } = useCache();
+
   useEffect(() => {
     loadInitialData();
   }, []);
 
-  // Intersection Observer for lazy loading
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      entries => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore) {
-          loadMoreAthletes();
-        }
-      },
-      { threshold: 0.1 }
-    );
-
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current);
-    }
-
-    return () => observer.disconnect();
-  }, [hasMore, loadingMore]);
-
   async function loadInitialData() {
     try {
       setLoading(true);
-      const [athletesData, teamsData] = await Promise.all([
-        fetchAthletes(ITEMS_PER_PAGE + 1, 0),
-        fetchTeams()
-      ]);
+      
+      let athletesData = getCacheData('athletes');
+      if (!athletesData || !isCacheFresh('athletes')) {
+        // Load all athletes, assuming not too many, set high limit
+        athletesData = await fetchAthletes(10000, 0);
+        setCacheData('athletes', athletesData);
+      }
+      
+      let teamsData = getCacheData('teams');
+      if (!teamsData || !isCacheFresh('teams')) {
+        teamsData = await fetchTeams();
+        setCacheData('teams', teamsData);
+      }
       
       const sortedTeams = teamsData.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
-      setAthletes(athletesData.slice(0, ITEMS_PER_PAGE));
+      setAthletes(athletesData);
       setTeams(sortedTeams);
-      setPage(1);
-      setHasMore(athletesData.length > ITEMS_PER_PAGE);
     } catch (error: any) {
       console.error("Failed to load athletes:", error);
       alert("Failed to load athletes: " + error.message);
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function loadMoreAthletes() {
-    if (loadingMore || !hasMore) return;
-    
-    try {
-      setLoadingMore(true);
-      const moreData = await fetchAthletes(ITEMS_PER_PAGE + 1, page * ITEMS_PER_PAGE);
-      const sliced = moreData.slice(0, ITEMS_PER_PAGE);
-      
-      setAthletes(prev => [...prev, ...sliced]);
-      const newPage = page + 1;
-      setPage(newPage);
-      setHasMore(moreData.length > ITEMS_PER_PAGE);
-    } catch (error: any) {
-      console.error("Error loading more athletes:", error);
-    } finally {
-      setLoadingMore(false);
     }
   }
 
@@ -140,12 +107,10 @@ export default function Athletes() {
       } else {
         await createAthlete(pendingData);
       }
+      invalidateCache('athletes');
       setIsModalOpen(false);
       reset();
       setEditingItem(null);
-      // Reset and reload
-      setPage(0);
-      setAthletes([]);
       loadInitialData();
     } catch (error: any) {
       console.error("Error saving athlete:", error);
@@ -164,9 +129,7 @@ export default function Athletes() {
     if (!itemToDelete) return;
     try {
       await deleteAthlete(itemToDelete);
-      // Reset and reload
-      setPage(0);
-      setAthletes([]);
+      invalidateCache('athletes');
       loadInitialData();
     } catch (error: any) {
       console.error("Error deleting athlete:", error);

@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import TeamCard from '../components/TeamCard';
 import { getDominantColor } from '../utils/colorExtractor';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { useCache } from '../contexts/CacheContext';
 
 export default function Teams() {
   usePageTitle('Teams');
@@ -20,13 +21,18 @@ export default function Teams() {
   const [pendingData, setPendingData] = useState(null);
 
   const { register, handleSubmit, reset } = useForm();
+  const { setCacheData, getCacheData, isCacheFresh, invalidateCache } = useCache();
 
   useEffect(() => {
     loadTeams();
   }, []);
 
   async function loadTeams() {
-    const data = await fetchTeams();
+    let data = getCacheData('teams');
+    if (!data || !isCacheFresh('teams')) {
+      data = await fetchTeams();
+      setCacheData('teams', data);
+    }
     const sortedTeams = data.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
     setTeams(sortedTeams);
   }
@@ -42,6 +48,7 @@ export default function Teams() {
     if (!teamToDelete) return;
     try {
         await deleteTeam(teamToDelete);
+        invalidateCache('teams');
         loadTeams();
     } catch (error: any) {
         console.error(error);
@@ -75,6 +82,7 @@ export default function Teams() {
     if (!pendingData) return;
     try {
         await createTeam(pendingData);
+        invalidateCache('teams');
         setIsModalOpen(false);
         reset();
         loadTeams();
