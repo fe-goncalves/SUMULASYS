@@ -8,16 +8,17 @@ import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function Committee() {
   usePageTitle('Committee');
-  const [committee, setCommittee] = useState([]);
-  const [teams, setTeams] = useState([]);
+  const [committee, setCommittee] = useState<any[]>([]);
+  const [teams, setTeams] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
+  const [editingItem, setEditingItem] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState(null);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   
   const [summaryModalOpen, setSummaryModalOpen] = useState(false);
-  const [pendingData, setPendingData] = useState(null);
+  const [pendingData, setPendingData] = useState<any>(null);
 
   const { register, handleSubmit, reset, setValue } = useForm();
 
@@ -26,14 +27,22 @@ export default function Committee() {
   }, []);
 
   async function loadData() {
-    const [committeeData, teamsData] = await Promise.all([
-      fetchCommittee(),
-      fetchTeams()
-    ]);
-    const sortedCommittee = committeeData.sort((a: any, b: any) => (a.surname || a.fullname || '').localeCompare(b.surname || b.fullname || ''));
-    const sortedTeams = teamsData.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
-    setCommittee(sortedCommittee);
-    setTeams(sortedTeams);
+    try {
+      setLoading(true);
+      const [committeeData, teamsData] = await Promise.all([
+        fetchCommittee(),
+        fetchTeams()
+      ]);
+      const sortedCommittee = committeeData.sort((a: any, b: any) => (a.surname || a.fullname || '').localeCompare(b.surname || b.fullname || ''));
+      const sortedTeams = teamsData.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
+      setCommittee(sortedCommittee);
+      setTeams(sortedTeams);
+    } catch (error: any) {
+      console.error("Failed to load committee:", error);
+      alert("Failed to load committee: " + error.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function openAddModal() {
@@ -48,34 +57,18 @@ export default function Committee() {
     setIsModalOpen(true);
   }
 
-  function openEditModal(item) {
+  function openEditModal(item: any) {
     setEditingItem(item);
     setValue('id', item.id);
     setValue('fullname', item.fullname);
     setValue('surname', item.surname);
     setValue('role', item.role);
-    
-    if (item.date_of_birth) {
-      const [year, month, day] = item.date_of_birth.split('-');
-      setValue('date_of_birth', `${day}/${month}/${year}`);
-    } else {
-      setValue('date_of_birth', '');
-    }
-    
     setValue('team_id', item.team_id);
     setIsModalOpen(true);
   }
 
-  async function onSubmit(data) {
-    let formattedData = { ...data };
-    if (data.date_of_birth) {
-      const parts = data.date_of_birth.split('/');
-      if (parts.length === 3) {
-        const [day, month, year] = parts;
-        formattedData.date_of_birth = `${year}-${month}-${day}`;
-      }
-    }
-    setPendingData(formattedData);
+  async function onSubmit(data: any) {
+    setPendingData(data);
     setSummaryModalOpen(true);
   }
 
@@ -99,7 +92,7 @@ export default function Committee() {
     setPendingData(null);
   }
 
-  function handleDeleteClick(id) {
+  function handleDeleteClick(id: string) {
     setItemToDelete(id);
     setDeleteModalOpen(true);
   }
@@ -151,6 +144,12 @@ export default function Committee() {
                 className="bg-transparent border-none text-white placeholder-gray-500 focus:ring-0 w-full outline-none"
             />
         </div>
+        {loading ? (
+          <div className="p-12 text-center text-gray-500">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            Loading committee members...
+          </div>
+        ) : (
         <div className="overflow-x-auto">
             <table className="w-full text-left">
             <thead>
@@ -159,7 +158,6 @@ export default function Committee() {
                 <th className="px-6 py-4">Team</th>
                 <th className="px-6 py-4">Surname</th>
                 <th className="px-6 py-4">Full Name</th>
-                <th className="px-6 py-4">Date of Birth</th>
                 <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
             </thead>
@@ -182,12 +180,6 @@ export default function Committee() {
                     </td>
                     <td className="px-6 py-4 font-bold text-white">{member.surname}</td>
                     <td className="px-6 py-4 text-gray-300">{member.fullname}</td>
-                    <td className="px-6 py-4 text-gray-400 text-sm">
-                      {member.date_of_birth ? (() => {
-                        const [year, month, day] = member.date_of_birth.split('-');
-                        return `${day}/${month}/${year}`;
-                      })() : ''}
-                    </td>
                     <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={() => openEditModal(member)} className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors">
                         <Edit size={16} />
@@ -200,7 +192,7 @@ export default function Committee() {
                 ))}
                 {filteredCommittee.length === 0 && (
                 <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         <Search size={32} className="text-gray-700 mb-2" />
                         <p>No committee members found matching your search.</p>
@@ -211,6 +203,7 @@ export default function Committee() {
             </tbody>
             </table>
         </div>
+        )}
       </div>
 
       {/* Add/Edit Modal */}
@@ -233,18 +226,6 @@ export default function Committee() {
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1.5">RG (ID - Numbers Only)</label>
                   <input {...register('id', { required: true, pattern: /^[0-9]+$/ })} className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50 font-mono" placeholder="123456789" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1.5">Date of Birth</label>
-                  <input 
-                    type="text" 
-                    placeholder="DD/MM/YYYY"
-                    {...register('date_of_birth', { 
-                        required: true,
-                        pattern: /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[012])\/(19|20)\d\d$/
-                    })} 
-                    className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50" 
-                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1.5">Team</label>

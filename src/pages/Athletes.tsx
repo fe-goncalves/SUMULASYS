@@ -8,16 +8,17 @@ import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function Athletes() {
   usePageTitle('Athletes');
-  const [athletes, setAthletes] = useState([]);
-  const [teams, setTeams] = useState([]);
+  const [athletes, setAthletes] = useState<any[]>([]);
+  const [teams, setTeams] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
+  const [editingItem, setEditingItem] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState(null);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   
   const [summaryModalOpen, setSummaryModalOpen] = useState(false);
-  const [pendingData, setPendingData] = useState(null);
+  const [pendingData, setPendingData] = useState<any>(null);
 
   const { register, handleSubmit, reset, setValue } = useForm();
 
@@ -27,6 +28,7 @@ export default function Athletes() {
 
   async function loadData() {
     try {
+      setLoading(true);
       const [athletesData, teamsData] = await Promise.all([
         fetchAthletes(),
         fetchTeams()
@@ -38,6 +40,8 @@ export default function Athletes() {
     } catch (error: any) {
       console.error("Failed to load athletes:", error);
       alert("Failed to load athletes: " + error.message);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -53,7 +57,7 @@ export default function Athletes() {
     setIsModalOpen(true);
   }
 
-  function openEditModal(item) {
+  function openEditModal(item: any) {
     setEditingItem(item);
     setValue('id', item.id);
     setValue('fullname', item.fullname);
@@ -70,7 +74,7 @@ export default function Athletes() {
     setIsModalOpen(true);
   }
 
-  async function onSubmit(data) {
+  async function onSubmit(data: any) {
     let formattedData = { ...data };
     if (data.date_of_birth) {
       const parts = data.date_of_birth.split('/');
@@ -103,7 +107,7 @@ export default function Athletes() {
     setPendingData(null);
   }
 
-  function handleDeleteClick(id) {
+  function handleDeleteClick(id: string) {
     setItemToDelete(id);
     setDeleteModalOpen(true);
   }
@@ -128,7 +132,7 @@ export default function Athletes() {
     (athlete.team_name && athlete.team_name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const formatDate = (dateStr) => {
+  const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
     const [year, month, day] = dateStr.split('-');
     return `${day}/${month}/${year}`;
@@ -161,6 +165,12 @@ export default function Athletes() {
                 className="bg-transparent border-none text-white placeholder-gray-500 focus:ring-0 w-full outline-none"
             />
         </div>
+        {loading ? (
+          <div className="p-12 text-center text-gray-500">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            Loading athletes...
+          </div>
+        ) : (
         <div className="overflow-x-auto">
             <table className="w-full text-left">
             <thead>
@@ -216,6 +226,7 @@ export default function Athletes() {
             </tbody>
             </table>
         </div>
+        )}
       </div>
 
       {/* Add/Edit Modal */}
