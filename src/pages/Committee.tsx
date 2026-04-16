@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Plus, Edit, Trash, Download, Search } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { fetchCommittee, createCommittee, updateCommittee, deleteCommittee, fetchTeams } from '../api';
@@ -20,7 +20,6 @@ export default function Committee() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [page, setPage] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const observerTarget = useRef<HTMLDivElement>(null);
   
@@ -62,8 +61,6 @@ export default function Committee() {
       const sortedTeams = teamsData.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
       setCommittee(committeeData);
       setTeams(sortedTeams);
-      // Temporarily estimate total count - will be updated when more data is loaded
-      setTotalCount(committeeData.length >= ITEMS_PER_PAGE ? committeeData.length + 1 : committeeData.length);
       setPage(1);
       setHasMore(committeeData.length === ITEMS_PER_PAGE);
     } catch (error: any) {
@@ -84,7 +81,7 @@ export default function Committee() {
       setCommittee(prev => [...prev, ...moreData]);
       const newPage = page + 1;
       setPage(newPage);
-      setHasMore((newPage * ITEMS_PER_PAGE) < totalCount);
+      setHasMore(moreData.length === ITEMS_PER_PAGE);
     } catch (error: any) {
       console.error("Error loading more committee:", error);
     } finally {
@@ -163,12 +160,12 @@ export default function Committee() {
     setItemToDelete(null);
   }
 
-  const filteredCommittee = committee.filter(member => 
+  const filteredCommittee = useMemo(() => committee.filter(member => 
     member.fullname.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.surname.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.id.includes(searchTerm) ||
     (member.team_name && member.team_name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  ), [committee, searchTerm]);
 
   return (
     <div className="space-y-8">

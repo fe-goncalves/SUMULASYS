@@ -9,13 +9,16 @@ const getUserId = async () => {
   return user.id;
 };
 
+const getCacheKey = (base: string, userId: string) => `${base}_${userId}`;
+const getPagingCacheKey = (base: string, userId: string, limit: number, offset: number) => `${base}_${userId}_${limit}_${offset}`;
+
 // Teams
 export async function fetchTeams() {
-  const cacheKey = 'teams';
+  const userId = await getUserId();
+  const cacheKey = getCacheKey('teams', userId);
   const cached = getCachedData(cacheKey);
   if (cached) return cached;
 
-  const userId = await getUserId();
   const { data, error } = await supabase.from('teams').select('*').eq('user_id', userId);
   if (error) throw error;
 
@@ -57,6 +60,10 @@ export async function deleteTeam(id: string) {
 // Athletes
 export async function fetchAthletes(limit: number = 500, offset: number = 0) {
   const userId = await getUserId();
+  const cacheKey = getPagingCacheKey('athletes', userId, limit, offset);
+  const cached = getCachedData(cacheKey);
+  if (cached) return cached;
+
   const { data, error } = await supabase
     .from('athletes')
     .select(`
@@ -82,7 +89,7 @@ export async function fetchAthletes(limit: number = 500, offset: number = 0) {
 
   // Sort by fullname as secondary sort in JavaScript
   processedData.sort((a, b) => a.fullname.localeCompare(b.fullname));
-  
+  setCachedData(cacheKey, processedData);
   return processedData;
 }
 
@@ -90,7 +97,7 @@ export async function fetchAthletesCount() {
   const userId = await getUserId();
   const { count, error } = await supabase
     .from('athletes')
-    .select('*', { count: 'exact', head: true })
+    .select('id', { count: 'estimated', head: true })
     .eq('user_id', userId);
 
   if (error) throw error;
@@ -121,6 +128,10 @@ export async function deleteAthlete(id: string) {
 // Committee
 export async function fetchCommittee(limit: number = 500, offset: number = 0) {
   const userId = await getUserId();
+  const cacheKey = getPagingCacheKey('committee', userId, limit, offset);
+  const cached = getCachedData(cacheKey);
+  if (cached) return cached;
+
   const { data, error } = await supabase
     .from('committee')
     .select(`
@@ -146,7 +157,7 @@ export async function fetchCommittee(limit: number = 500, offset: number = 0) {
 
   // Sort by fullname as secondary sort in JavaScript
   processedData.sort((a, b) => a.fullname.localeCompare(b.fullname));
-  
+  setCachedData(cacheKey, processedData);
   return processedData;
 }
 
@@ -154,7 +165,7 @@ export async function fetchCommitteeCount(): Promise<number> {
   const userId = await getUserId();
   const { count, error } = await supabase
     .from('committee')
-    .select('*', { count: 'exact', head: true })
+    .select('id', { count: 'estimated', head: true })
     .eq('user_id', userId);
 
   if (error) throw error;
@@ -184,11 +195,11 @@ export async function deleteCommittee(id: string) {
 
 // Tournaments
 export async function fetchTournaments() {
-  const cacheKey = 'tournaments';
+  const userId = await getUserId();
+  const cacheKey = getCacheKey('tournaments', userId);
   const cached = getCachedData(cacheKey);
   if (cached) return cached;
 
-  const userId = await getUserId();
   const { data, error } = await supabase.from('tournaments').select('*').eq('user_id', userId);
   if (error) throw error;
 
@@ -227,27 +238,30 @@ export async function createTournament(data: any) {
   const user_id = await getUserId();
   const { data: newTournament, error } = await supabase.from('tournaments').insert({ ...data, user_id }).select().single();
   if (error) throw error;
+  clearCache('tournaments');
   return newTournament;
 }
 
 export async function updateTournament(id: string, data: any) {
   const { data: updatedTournament, error } = await supabase.from('tournaments').update(data).eq('id', id).select().single();
   if (error) throw error;
+  clearCache('tournaments');
   return updatedTournament;
 }
 
 export async function deleteTournament(id: string) {
   const { error } = await supabase.from('tournaments').delete().eq('id', id);
   if (error) throw error;
+  clearCache('tournaments');
 }
 
 // Matches
 export async function fetchMatches() {
-  const cacheKey = 'matches';
+  const userId = await getUserId();
+  const cacheKey = getCacheKey('matches', userId);
   const cached = getCachedData(cacheKey);
   if (cached) return cached;
 
-  const userId = await getUserId();
   const { data, error } = await supabase
     .from('matches')
     .select(`
@@ -358,12 +372,14 @@ export async function createMatch(data: any) {
 export async function updateMatch(id: string, data: any) {
   const { data: updatedMatch, error } = await supabase.from('matches').update(data).eq('id', id).select().single();
   if (error) throw error;
+  clearCache('matches');
   return updatedMatch;
 }
 
 export async function deleteMatch(id: string) {
   const { error } = await supabase.from('matches').delete().eq('id', id);
   if (error) throw error;
+  clearCache('matches');
 }
 
 // Backup

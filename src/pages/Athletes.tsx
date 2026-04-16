@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Plus, Edit, Trash, Download, Search } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { fetchAthletes, fetchAthletesCount, createAthlete, updateAthlete, deleteAthlete, fetchTeams } from '../api';
+import { fetchAthletes, createAthlete, updateAthlete, deleteAthlete, fetchTeams } from '../api';
 import ConfirmationModal from '../components/ConfirmationModal';
 import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
 import { usePageTitle } from '../hooks/usePageTitle';
@@ -20,7 +20,6 @@ export default function Athletes() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [page, setPage] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const observerTarget = useRef<HTMLDivElement>(null);
   
@@ -54,18 +53,16 @@ export default function Athletes() {
   async function loadInitialData() {
     try {
       setLoading(true);
-      const [athletesData, teamsData, count] = await Promise.all([
-        fetchAthletes(ITEMS_PER_PAGE, 0),
-        fetchTeams(),
-        fetchAthletesCount()
+      const [athletesData, teamsData] = await Promise.all([
+        fetchAthletes(ITEMS_PER_PAGE + 1, 0),
+        fetchTeams()
       ]);
       
       const sortedTeams = teamsData.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
-      setAthletes(athletesData);
+      setAthletes(athletesData.slice(0, ITEMS_PER_PAGE));
       setTeams(sortedTeams);
-      setTotalCount(count);
       setPage(1);
-      setHasMore(ITEMS_PER_PAGE < count);
+      setHasMore(athletesData.length > ITEMS_PER_PAGE);
     } catch (error: any) {
       console.error("Failed to load athletes:", error);
       alert("Failed to load athletes: " + error.message);
@@ -79,12 +76,13 @@ export default function Athletes() {
     
     try {
       setLoadingMore(true);
-      const moreData = await fetchAthletes(ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+      const moreData = await fetchAthletes(ITEMS_PER_PAGE + 1, page * ITEMS_PER_PAGE);
+      const sliced = moreData.slice(0, ITEMS_PER_PAGE);
       
-      setAthletes(prev => [...prev, ...moreData]);
+      setAthletes(prev => [...prev, ...sliced]);
       const newPage = page + 1;
       setPage(newPage);
-      setHasMore((newPage * ITEMS_PER_PAGE) < totalCount);
+      setHasMore(moreData.length > ITEMS_PER_PAGE);
     } catch (error: any) {
       console.error("Error loading more athletes:", error);
     } finally {
@@ -178,12 +176,12 @@ export default function Athletes() {
     setItemToDelete(null);
   }
 
-  const filteredAthletes = athletes.filter(athlete => 
+  const filteredAthletes = useMemo(() => athletes.filter(athlete => 
     athlete.fullname.toLowerCase().includes(searchTerm.toLowerCase()) ||
     athlete.surname.toLowerCase().includes(searchTerm.toLowerCase()) ||
     athlete.id.includes(searchTerm) ||
     (athlete.team_name && athlete.team_name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  ), [athletes, searchTerm]);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '';

@@ -37,7 +37,8 @@ export function getCachedData(key: string): any | null {
 
 export function setCachedData(key: string, data: any): void {
   try {
-    const ttl = CACHE_TTL_CONFIG[key] || DEFAULT_CACHE_DURATION;
+    const cacheBase = key.split('_')[0];
+    const ttl = CACHE_TTL_CONFIG[cacheBase] || DEFAULT_CACHE_DURATION;
     
     const entry: CacheEntry = {
       data,
@@ -92,7 +93,11 @@ function clearOldestCacheEntries(): void {
 
 export function clearCache(key?: string): void {
   if (key) {
-    localStorage.removeItem(`cache_${key}`);
+    Object.keys(localStorage).forEach(k => {
+      if (k.startsWith(`cache_${key}`)) {
+        localStorage.removeItem(k);
+      }
+    });
   } else {
     // Clear all cache entries
     Object.keys(localStorage).forEach(k => {
