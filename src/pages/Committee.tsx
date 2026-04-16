@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Edit, Trash, Download, Search } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { fetchCommittee, createCommittee, updateCommittee, deleteCommittee, fetchTeams } from '../api';
@@ -6,16 +6,23 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
 import { usePageTitle } from '../hooks/usePageTitle';
 
+const ITEMS_PER_PAGE = 100;
+
 export default function Committee() {
   usePageTitle('Committee');
   const [committee, setCommittee] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const observerTarget = useRef<HTMLDivElement>(null);
   
   const [summaryModalOpen, setSummaryModalOpen] = useState(false);
   const [pendingData, setPendingData] = useState<any>(null);
@@ -23,25 +30,65 @@ export default function Committee() {
   const { register, handleSubmit, reset, setValue } = useForm();
 
   useEffect(() => {
-    loadData();
+    loadInitialData();
   }, []);
 
-  async function loadData() {
+  // Intersection Observer for lazy loading
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          loadMoreCommittee();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore]);
+
+  async function loadInitialData() {
     try {
       setLoading(true);
       const [committeeData, teamsData] = await Promise.all([
-        fetchCommittee(),
+        fetchCommittee(ITEMS_PER_PAGE, 0),
         fetchTeams()
       ]);
-      const sortedCommittee = committeeData.sort((a: any, b: any) => (a.surname || a.fullname || '').localeCompare(b.surname || b.fullname || ''));
+      
       const sortedTeams = teamsData.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
-      setCommittee(sortedCommittee);
+      setCommittee(committeeData);
       setTeams(sortedTeams);
+      // Temporarily estimate total count - will be updated when more data is loaded
+      setTotalCount(committeeData.length >= ITEMS_PER_PAGE ? committeeData.length + 1 : committeeData.length);
+      setPage(1);
+      setHasMore(committeeData.length === ITEMS_PER_PAGE);
     } catch (error: any) {
       console.error("Failed to load committee:", error);
       alert("Failed to load committee: " + error.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadMoreCommittee() {
+    if (loadingMore || !hasMore) return;
+    
+    try {
+      setLoadingMore(true);
+      const moreData = await fetchCommittee(ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+      
+      setCommittee(prev => [...prev, ...moreData]);
+      const newPage = page + 1;
+      setPage(newPage);
+      setHasMore((newPage * ITEMS_PER_PAGE) < totalCount);
+    } catch (error: any) {
+      console.error("Error loading more committee:", error);
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -83,7 +130,10 @@ export default function Committee() {
       setIsModalOpen(false);
       reset();
       setEditingItem(null);
-      loadData();
+      // Reset and reload
+      setPage(0);
+      setCommittee([]);
+      loadInitialData();
     } catch (error: any) {
       console.error("Error saving member:", error);
       alert(error.message || "Failed to save member. Please try again.");
@@ -101,7 +151,10 @@ export default function Committee() {
     if (!itemToDelete) return;
     try {
       await deleteCommittee(itemToDelete);
-      loadData();
+      // Reset and reload
+      setPage(0);
+      setCommittee([]);
+      loadInitialData();
     } catch (error: any) {
       console.error("Error deleting member:", error);
       alert("Failed to delete member: " + error.message);
@@ -202,6 +255,18 @@ export default function Committee() {
                 )}
             </tbody>
             </table>
+            
+            {/* Lazy load trigger */}
+            {hasMore && filteredCommittee.length > 0 && (
+              <div ref={observerTarget} className="p-4 text-center">
+                {loadingMore && (
+                  <div className="flex items-center justify-center gap-2 text-gray-500">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b border-orange-500"></div>
+                    <span>Loading more...</span>
+                  </div>
+                )}
+              </div>
+            )}
         </div>
         )}
       </div>

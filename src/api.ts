@@ -15,7 +15,8 @@ export async function fetchTeams() {
   const cached = getCachedData(cacheKey);
   if (cached) return cached;
 
-  const { data, error } = await supabase.from('teams').select('*');
+  const userId = await getUserId();
+  const { data, error } = await supabase.from('teams').select('*').eq('user_id', userId);
   if (error) throw error;
 
   setCachedData(cacheKey, data);
@@ -54,19 +55,21 @@ export async function deleteTeam(id: string) {
 }
 
 // Athletes
-export async function fetchAthletes() {
-  const cacheKey = 'athletes';
-  const cached = getCachedData(cacheKey);
-  if (cached) return cached;
-
+export async function fetchAthletes(limit: number = 500, offset: number = 0) {
+  const userId = await getUserId();
   const { data, error } = await supabase
     .from('athletes')
     .select(`
       *,
       teams(fullname, shortname, logotype)
-    `);
+    `)
+    .eq('user_id', userId)
+    .order('surname', { ascending: true })
+    .limit(limit)
+    .offset(offset);
+
   if (error) throw error;
-  
+
   const processedData = data.map(a => {
     const teamData = Array.isArray(a.teams) ? a.teams[0] : a.teams;
     return {
@@ -77,8 +80,21 @@ export async function fetchAthletes() {
     };
   });
 
-  setCachedData(cacheKey, processedData);
+  // Sort by fullname as secondary sort in JavaScript
+  processedData.sort((a, b) => a.fullname.localeCompare(b.fullname));
+  
   return processedData;
+}
+
+export async function fetchAthletesCount() {
+  const userId = await getUserId();
+  const { count, error } = await supabase
+    .from('athletes')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId);
+
+  if (error) throw error;
+  return count || 0;
 }
 
 export async function createAthlete(data: any) {
@@ -103,19 +119,21 @@ export async function deleteAthlete(id: string) {
 }
 
 // Committee
-export async function fetchCommittee() {
-  const cacheKey = 'committee';
-  const cached = getCachedData(cacheKey);
-  if (cached) return cached;
-
+export async function fetchCommittee(limit: number = 500, offset: number = 0) {
+  const userId = await getUserId();
   const { data, error } = await supabase
     .from('committee')
     .select(`
       *,
       teams(fullname, shortname, logotype)
-    `);
+    `)
+    .eq('user_id', userId)
+    .order('surname', { ascending: true })
+    .limit(limit)
+    .offset(offset);
+
   if (error) throw error;
-  
+
   const processedData = data.map(c => {
     const teamData = Array.isArray(c.teams) ? c.teams[0] : c.teams;
     return {
@@ -126,8 +144,21 @@ export async function fetchCommittee() {
     };
   });
 
-  setCachedData(cacheKey, processedData);
+  // Sort by fullname as secondary sort in JavaScript
+  processedData.sort((a, b) => a.fullname.localeCompare(b.fullname));
+  
   return processedData;
+}
+
+export async function fetchCommitteeCount(): Promise<number> {
+  const userId = await getUserId();
+  const { count, error } = await supabase
+    .from('committee')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId);
+
+  if (error) throw error;
+  return count || 0;
 }
 
 export async function createCommittee(data: any) {
@@ -153,8 +184,15 @@ export async function deleteCommittee(id: string) {
 
 // Tournaments
 export async function fetchTournaments() {
-  const { data, error } = await supabase.from('tournaments').select('*');
+  const cacheKey = 'tournaments';
+  const cached = getCachedData(cacheKey);
+  if (cached) return cached;
+
+  const userId = await getUserId();
+  const { data, error } = await supabase.from('tournaments').select('*').eq('user_id', userId);
   if (error) throw error;
+
+  setCachedData(cacheKey, data);
   return data;
 }
 
@@ -205,6 +243,11 @@ export async function deleteTournament(id: string) {
 
 // Matches
 export async function fetchMatches() {
+  const cacheKey = 'matches';
+  const cached = getCachedData(cacheKey);
+  if (cached) return cached;
+
+  const userId = await getUserId();
   const { data, error } = await supabase
     .from('matches')
     .select(`
@@ -212,10 +255,11 @@ export async function fetchMatches() {
       tournament:tournaments(fullname, logotype),
       team_a:teams!matches_team_a_id_fkey(fullname, shortname, logotype),
       team_b:teams!matches_team_b_id_fkey(fullname, shortname, logotype)
-    `);
+    `)
+    .eq('user_id', userId);
   if (error) throw error;
 
-  return data.map(m => {
+  const formattedData = data.map(m => {
     const tournamentData = Array.isArray(m.tournament) ? m.tournament[0] : m.tournament;
     const teamAData = Array.isArray(m.team_a) ? m.team_a[0] : m.team_a;
     const teamBData = Array.isArray(m.team_b) ? m.team_b[0] : m.team_b;
@@ -232,6 +276,9 @@ export async function fetchMatches() {
       team_b_logotype: teamBData?.logotype,
     };
   });
+
+  setCachedData(cacheKey, formattedData);
+  return formattedData;
 }
 
 export async function fetchMatch(id: string) {
@@ -240,18 +287,27 @@ export async function fetchMatch(id: string) {
     .select(`
       *,
       tournament:tournaments(fullname, logotype, main_color),
-      team_a:teams!matches_team_a_id_fkey(*),
-      team_b:teams!matches_team_b_id_fkey(*)
+      team_a:teams!matches_team_a_id_fkey(*)
     `)
     .eq('id', id)
     .single();
     
   if (error) throw error;
 
-  const { data: teamAAthletes } = await supabase.from('athletes').select('*').eq('team_id', m.team_a_id);
-  const { data: teamBAthletes } = await supabase.from('athletes').select('*').eq('team_id', m.team_b_id);
-  const { data: teamACommittee } = await supabase.from('committee').select('*').eq('team_id', m.team_a_id);
-  const { data: teamBCommittee } = await supabase.from('committee').select('*').eq('team_id', m.team_b_id);
+  // Get only the team_b data
+  const { data: teamB } = await supabase
+    .from('teams')
+    .select('*')
+    .eq('id', m.team_b_id)
+    .single();
+
+  // Load athletes and committee in parallel for both teams
+  const [teamAAthletes, teamBAthletes, teamACommittee, teamBCommittee] = await Promise.all([
+    supabase.from('athletes').select('id,fullname,surname,date_of_birth').eq('team_id', m.team_a_id).then(r => r.data || []),
+    supabase.from('athletes').select('id,fullname,surname,date_of_birth').eq('team_id', m.team_b_id).then(r => r.data || []),
+    supabase.from('committee').select('id,fullname,surname,role').eq('team_id', m.team_a_id).then(r => r.data || []),
+    supabase.from('committee').select('id,fullname,surname,role').eq('team_id', m.team_b_id).then(r => r.data || [])
+  ]);
 
   return {
     ...m,
@@ -261,27 +317,32 @@ export async function fetchMatch(id: string) {
     team_a_name: m.team_a?.fullname,
     team_a_shortname: m.team_a?.shortname,
     team_a_logotype: m.team_a?.logotype,
-    team_b_name: m.team_b?.fullname,
-    team_b_shortname: m.team_b?.shortname,
-    team_b_logotype: m.team_b?.logotype,
+    team_b_name: teamB?.fullname,
+    team_b_shortname: teamB?.shortname,
+    team_b_logotype: teamB?.logotype,
     team_a: { ...m.team_a, athletes: teamAAthletes || [], committee: teamACommittee || [] },
-    team_b: { ...m.team_b, athletes: teamBAthletes || [], committee: teamBCommittee || [] }
+    team_b: { ...teamB, athletes: teamBAthletes || [], committee: teamBCommittee || [] }
   };
 }
 
 export async function createMatch(data: any) {
   const user_id = await getUserId();
   
-  // Find max game number
-  const { data: matches } = await supabase.from('matches').select('id');
+  // Find max game number by sorting DESC and taking first record
+  const { data: lastMatch } = await supabase
+    .from('matches')
+    .select('id')
+    .eq('user_id', user_id)
+    .order('id', { ascending: false })
+    .limit(1);
+  
   let maxNum = 0;
-  (matches || []).forEach(m => {
-    const match = m.id.match(/GAME (\d+)/);
+  if (lastMatch && lastMatch.length > 0) {
+    const match = lastMatch[0].id.match(/GAME (\d+)/);
     if (match) {
-      const num = parseInt(match[1]);
-      if (num > maxNum) maxNum = num;
+      maxNum = parseInt(match[1]);
     }
-  });
+  }
   
   const nextNum = maxNum + 1;
   const id = `GAME ${nextNum}`;
@@ -289,6 +350,8 @@ export async function createMatch(data: any) {
   
   const { data: insertedMatch, error } = await supabase.from('matches').insert(newMatch).select().single();
   if (error) throw error;
+  
+  clearCache('matches');
   return insertedMatch;
 }
 
@@ -305,6 +368,8 @@ export async function deleteMatch(id: string) {
 
 // Backup
 export async function exportData() {
+  const userId = await getUserId();
+  
   const [
     { data: teams },
     { data: athletes },
@@ -312,11 +377,11 @@ export async function exportData() {
     { data: tournaments },
     { data: matches }
   ] = await Promise.all([
-    supabase.from('teams').select('*'),
-    supabase.from('athletes').select('*'),
-    supabase.from('committee').select('*'),
-    supabase.from('tournaments').select('*'),
-    supabase.from('matches').select('*')
+    supabase.from('teams').select('*').eq('user_id', userId),
+    supabase.from('athletes').select('*').eq('user_id', userId),
+    supabase.from('committee').select('*').eq('user_id', userId),
+    supabase.from('tournaments').select('*').eq('user_id', userId),
+    supabase.from('matches').select('*').eq('user_id', userId)
   ]);
 
   return {
