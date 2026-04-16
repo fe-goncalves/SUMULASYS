@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { getCachedData, setCachedData, clearCache } from './utils/cache';
 
 export const API_URL = ''; // Not used anymore
 
@@ -10,8 +11,14 @@ const getUserId = async () => {
 
 // Teams
 export async function fetchTeams() {
+  const cacheKey = 'teams';
+  const cached = getCachedData(cacheKey);
+  if (cached) return cached;
+
   const { data, error } = await supabase.from('teams').select('*');
   if (error) throw error;
+
+  setCachedData(cacheKey, data);
   return data;
 }
 
@@ -29,22 +36,29 @@ export async function createTeam(data: any) {
   const user_id = await getUserId();
   const { data: newTeam, error } = await supabase.from('teams').insert({ ...data, user_id }).select().single();
   if (error) throw error;
+  clearCache('teams');
   return newTeam;
 }
 
 export async function updateTeam(id: string, data: any) {
   const { data: updatedTeam, error } = await supabase.from('teams').update(data).eq('id', id).select().single();
   if (error) throw error;
+  clearCache('teams');
   return updatedTeam;
 }
 
 export async function deleteTeam(id: string) {
   const { error } = await supabase.from('teams').delete().eq('id', id);
   if (error) throw error;
+  clearCache('teams');
 }
 
 // Athletes
 export async function fetchAthletes() {
+  const cacheKey = 'athletes';
+  const cached = getCachedData(cacheKey);
+  if (cached) return cached;
+
   const { data, error } = await supabase
     .from('athletes')
     .select(`
@@ -53,7 +67,7 @@ export async function fetchAthletes() {
     `);
   if (error) throw error;
   
-  return data.map(a => {
+  const processedData = data.map(a => {
     const teamData = Array.isArray(a.teams) ? a.teams[0] : a.teams;
     return {
       ...a,
@@ -62,28 +76,38 @@ export async function fetchAthletes() {
       team_logotype: teamData?.logotype
     };
   });
+
+  setCachedData(cacheKey, processedData);
+  return processedData;
 }
 
 export async function createAthlete(data: any) {
   const user_id = await getUserId();
   const { data: newAthlete, error } = await supabase.from('athletes').insert({ ...data, user_id }).select().single();
   if (error) throw error;
+  clearCache('athletes');
   return newAthlete;
 }
 
 export async function updateAthlete(id: string, data: any) {
   const { data: updatedAthlete, error } = await supabase.from('athletes').update(data).eq('id', id).select().single();
   if (error) throw error;
+  clearCache('athletes');
   return updatedAthlete;
 }
 
 export async function deleteAthlete(id: string) {
   const { error } = await supabase.from('athletes').delete().eq('id', id);
   if (error) throw error;
+  clearCache('athletes');
 }
 
 // Committee
 export async function fetchCommittee() {
+  const cacheKey = 'committee';
+  const cached = getCachedData(cacheKey);
+  if (cached) return cached;
+
   const { data, error } = await supabase
     .from('committee')
     .select(`
@@ -92,7 +116,7 @@ export async function fetchCommittee() {
     `);
   if (error) throw error;
   
-  return data.map(c => {
+  const processedData = data.map(c => {
     const teamData = Array.isArray(c.teams) ? c.teams[0] : c.teams;
     return {
       ...c,
@@ -101,24 +125,30 @@ export async function fetchCommittee() {
       team_logotype: teamData?.logotype
     };
   });
+
+  setCachedData(cacheKey, processedData);
+  return processedData;
 }
 
 export async function createCommittee(data: any) {
   const user_id = await getUserId();
   const { data: newMember, error } = await supabase.from('committee').insert({ ...data, user_id }).select().single();
   if (error) throw error;
+  clearCache('committee');
   return newMember;
 }
 
 export async function updateCommittee(id: string, data: any) {
   const { data: updatedMember, error } = await supabase.from('committee').update(data).eq('id', id).select().single();
   if (error) throw error;
+  clearCache('committee');
   return updatedMember;
 }
 
 export async function deleteCommittee(id: string) {
   const { error } = await supabase.from('committee').delete().eq('id', id);
   if (error) throw error;
+  clearCache('committee');
 }
 
 // Tournaments
