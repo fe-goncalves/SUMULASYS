@@ -366,8 +366,8 @@ export default function TeamDetail() {
                     type="text" 
                     placeholder="DD/MM/YYYY"
                     {...register('date_of_birth', { 
-                        required: true,
-                        pattern: /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[012])\/(19|20)\d\d$/
+                        required: activeTab === 'athletes' ? 'Date of birth is required for athletes' : false,
+                        pattern: activeTab === 'athletes' ? { value: /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[012])\/(19|20)\d\d$/, message: 'Invalid date format' } : undefined
                     })} 
                     className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50" 
                   />
