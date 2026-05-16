@@ -373,7 +373,7 @@ const drawMatchScoreSheet = (doc: jsPDF, match: any) => {
                 16: { cellWidth: 7.0 },
                 17: { cellWidth: 7.0 },
             },
-            margin: { left: 9.25, right: 9.25 },
+            margin: { top: 10, bottom: 5, left: 9.25, right: 9.25 },
             tableWidth: 191.5
         });
     };
