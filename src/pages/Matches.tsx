@@ -8,6 +8,7 @@ import { generateMatchesPDF } from '../utils/pdfGenerator';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
+import { useCache } from '../contexts/CacheContext';
 
 export default function Matches() {
   usePageTitle('Matches');
@@ -99,17 +100,22 @@ export default function Matches() {
   }
 
   async function onSubmit(data) {
-    if (!user?.id) return;
-    if (editingMatch) {
-        await updateMatch(editingMatch.id, data);
-    } else {
-        await createMatch(user.id, data);
+    try {
+      if (!user?.id) return;
+      if (editingMatch) {
+          await updateMatch(editingMatch.id, data);
+      } else {
+          await createMatch(user.id, data);
+      }
+      invalidateCache('matches');
+      setIsModalOpen(false);
+      reset();
+      setEditingMatch(null);
+      loadData();
+    } catch (error: any) {
+      console.error('Error saving match:', error);
+      alert('Error saving match: ' + (error.message || 'Unknown error'));
     }
-    invalidateCache('matches');
-    setIsModalOpen(false);
-    reset();
-    setEditingMatch(null);
-    loadData();
   }
 
   function handleDeleteClick(id) {

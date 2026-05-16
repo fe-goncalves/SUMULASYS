@@ -321,32 +321,53 @@ export async function fetchMatch(id: string) {
 }
 
 export async function createMatch(userId: string, data: any) {
-  
-  // Find max game number by sorting DESC and taking first record
-  const { data: lastMatch } = await supabase
-    .from('matches')
-    .select('id')
-    .eq('user_id', userId)
-    .order('id', { ascending: false })
-    .limit(1);
-  
-  let maxNum = 0;
-  if (lastMatch && lastMatch.length > 0) {
-    const match = lastMatch[0].id.match(/GAME (\d+)/);
-    if (match) {
-      maxNum = parseInt(match[1]);
+  try {
+    // Validate required fields
+    if (!data.tournament_id || !data.date || !data.phase || !data.round || !data.team_a_id || !data.team_b_id) {
+      throw new Error('Missing required fields: tournament_id, date, phase, round, team_a_id, team_b_id');
     }
+
+    if (data.team_a_id === data.team_b_id) {
+      throw new Error('Team A and Team B cannot be the same team');
+    }
+
+    // Find max game number by sorting DESC and taking first record
+    const { data: lastMatch, error: fetchError } = await supabase
+      .from('matches')
+      .select('id')
+      .eq('user_id', userId)
+      .order('id', { ascending: false })
+      .limit(1);
+    
+    if (fetchError) {
+      console.error('Error fetching last match:', fetchError);
+      throw new Error(`Failed to fetch existing matches: ${fetchError.message}`);
+    }
+    
+    let maxNum = 0;
+    if (lastMatch && lastMatch.length > 0) {
+      const match = lastMatch[0].id.match(/GAME (\d+)/);
+      if (match) {
+        maxNum = parseInt(match[1]);
+      }
+    }
+    
+    const nextNum = maxNum + 1;
+    const id = `GAME ${nextNum}`;
+    const newMatch = { ...data, id, code: id, user_id: userId };
+    
+    const { data: insertedMatch, error } = await supabase.from('matches').insert(newMatch).select().single();
+    if (error) {
+      console.error('Error inserting match:', error);
+      throw new Error(`Failed to create match: ${error.message}`);
+    }
+    
+    clearCache('matches');
+    return insertedMatch;
+  } catch (error: any) {
+    console.error('createMatch error:', error);
+    throw error;
   }
-  
-  const nextNum = maxNum + 1;
-  const id = `GAME ${nextNum}`;
-  const newMatch = { ...data, id, code: id, user_id: userId };
-  
-  const { data: insertedMatch, error } = await supabase.from('matches').insert(newMatch).select().single();
-  if (error) throw error;
-  
-  clearCache('matches');
-  return insertedMatch;
 }
 
 export async function updateMatch(id: string, data: any) {
