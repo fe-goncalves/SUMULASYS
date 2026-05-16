@@ -54,7 +54,12 @@ interface AppData {
   tournaments: Tournament[];
   matches: Match[];
 }
-
+// Generate a unique ID for matches (prevents race condition with sequential numbering)
+function generateMatchId(): string {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 10000);
+  return `GAME-${timestamp}-${random}`;
+}
 export const storage = {
   // Teams
   getTeams: async (userId: string) => {
@@ -256,18 +261,7 @@ export const storage = {
     };
   },
   createMatch: async (userId: string, matchData: any) => {
-    const { data: matches } = await supabase.from('matches').select('id').eq('user_id', userId);
-    
-    let maxNum = 0;
-    (matches || []).forEach(m => {
-        const match = m.id.match(/GAME (\d+)/);
-        if (match) {
-            const num = parseInt(match[1]);
-            if (num > maxNum) maxNum = num;
-        }
-    });
-    const nextNum = maxNum + 1;
-    const id = `GAME ${nextNum}`;
+    const id = generateMatchId();
     const newMatch = { ...matchData, id, code: id, user_id: userId };
     
     const { data, error } = await supabase.from('matches').insert([newMatch]).select().single();

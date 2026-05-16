@@ -6,6 +6,13 @@ export const API_URL = ''; // Not used anymore
 const getCacheKey = (base: string, userId: string) => `${base}_${userId}`;
 const getPagingCacheKey = (base: string, userId: string, limit: number, offset: number) => `${base}_${userId}_${limit}_${offset}`;
 
+// Generate a unique ID for matches (prevents race condition with sequential numbering)
+function generateMatchId(): string {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 10000);
+  return `GAME-${timestamp}-${random}`;
+}
+
 // Teams
 export async function fetchTeams(userId: string) {
   const cacheKey = getCacheKey('teams', userId);
@@ -331,29 +338,8 @@ export async function createMatch(userId: string, data: any) {
       throw new Error('Team A and Team B cannot be the same team');
     }
 
-    // Find max game number by sorting DESC and taking first record
-    const { data: lastMatch, error: fetchError } = await supabase
-      .from('matches')
-      .select('id')
-      .eq('user_id', userId)
-      .order('id', { ascending: false })
-      .limit(1);
-    
-    if (fetchError) {
-      console.error('Error fetching last match:', fetchError);
-      throw new Error(`Failed to fetch existing matches: ${fetchError.message}`);
-    }
-    
-    let maxNum = 0;
-    if (lastMatch && lastMatch.length > 0) {
-      const match = lastMatch[0].id.match(/GAME (\d+)/);
-      if (match) {
-        maxNum = parseInt(match[1]);
-      }
-    }
-    
-    const nextNum = maxNum + 1;
-    const id = `GAME ${nextNum}`;
+    // Generate unique ID to prevent race conditions
+    const id = generateMatchId();
     const newMatch = { ...data, id, code: id, user_id: userId };
     
     const { data: insertedMatch, error } = await supabase.from('matches').insert(newMatch).select().single();
