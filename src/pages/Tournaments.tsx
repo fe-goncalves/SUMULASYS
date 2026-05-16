@@ -6,10 +6,11 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { usePageTitle } from '../hooks/usePageTitle';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Tournaments() {
   usePageTitle('Tournaments');
+  const { user } = useAuth();
   const [tournaments, setTournaments] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTournament, setEditingTournament] = useState(null);
@@ -22,12 +23,15 @@ export default function Tournaments() {
   const { register, handleSubmit, reset, setValue } = useForm();
 
   useEffect(() => {
-    loadTournaments();
-  }, []);
+    if (user?.id) {
+      loadTournaments();
+    }
+  }, [user?.id]);
 
   async function loadTournaments() {
+    if (!user?.id) return;
     try {
-      const data = await fetchTournaments();
+      const data = await fetchTournaments(user.id);
       const sortedTournaments = data.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
       setTournaments(sortedTournaments);
     } catch (error: any) {

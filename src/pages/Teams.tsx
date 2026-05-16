@@ -8,10 +8,11 @@ import { motion } from 'framer-motion';
 import TeamCard from '../components/TeamCard';
 import { getDominantColor } from '../utils/colorExtractor';
 import { usePageTitle } from '../hooks/usePageTitle';
-import { useCache } from '../contexts/CacheContext';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Teams() {
   usePageTitle('Teams');
+  const { user } = useAuth();
   const [teams, setTeams] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -24,13 +25,16 @@ export default function Teams() {
   const { setCacheData, getCacheData, isCacheFresh, invalidateCache } = useCache();
 
   useEffect(() => {
-    loadTeams();
-  }, []);
+    if (user?.id) {
+      loadTeams();
+    }
+  }, [user?.id]);
 
   async function loadTeams() {
+    if (!user?.id) return;
     let data = getCacheData('teams');
     if (!data || !isCacheFresh('teams')) {
-      data = await fetchTeams();
+      data = await fetchTeams(user.id);
       setCacheData('teams', data);
     }
     const sortedTeams = data.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
@@ -79,9 +83,9 @@ export default function Teams() {
   }
 
   async function handleConfirmSave() {
-    if (!pendingData) return;
+    if (!pendingData || !user?.id) return;
     try {
-        await createTeam(pendingData);
+        await createTeam(user.id, pendingData);
         invalidateCache('teams');
         setIsModalOpen(false);
         reset();

@@ -7,9 +7,11 @@ import { fetchMatches, createMatch, fetchTeams, fetchTournaments, deleteMatch, u
 import { generateMatchesPDF } from '../utils/pdfGenerator';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Matches() {
   usePageTitle('Matches');
+  const { user } = useAuth();
   const [matches, setMatches] = useState([]);
   const [teams, setTeams] = useState([]);
   const [tournaments, setTournaments] = useState([]);
@@ -24,21 +26,38 @@ export default function Matches() {
   
   const { register, handleSubmit, reset, setValue } = useForm();
 
+  const { setCacheData, getCacheData, isCacheFresh, invalidateCache } = useCache();
+
   useEffect(() => {
-    loadData();
-  }, []);
+    if (user?.id) {
+      loadData();
+    }
+  }, [user?.id]);
 
   async function loadData() {
-    const [matchesData, teamsData, tournamentsData] = await Promise.all([
-      fetchMatches(),
-      fetchTeams(),
-      fetchTournaments()
-    ]);
+    if (!user?.id) return;
+    let matchesData = getCacheData('matches');
+    if (!matchesData || !isCacheFresh('matches')) {
+      matchesData = await fetchMatches(user.id);
+      setCacheData('matches', matchesData || []);
+    }
     
-    const sortedTeams = teamsData.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
-    const sortedTournaments = tournamentsData.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
+    let teamsData = getCacheData('teams');
+    if (!teamsData || !isCacheFresh('teams')) {
+      teamsData = await fetchTeams(user.id);
+      setCacheData('teams', teamsData || []);
+    }
     
-    setMatches(matchesData);
+    let tournamentsData = getCacheData('tournaments');
+    if (!tournamentsData || !isCacheFresh('tournaments')) {
+      tournamentsData = await fetchTournaments(user.id);
+      setCacheData('tournaments', tournamentsData || []);
+    }
+    
+    const sortedTeams = (teamsData || []).sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
+    const sortedTournaments = (tournamentsData || []).sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
+    
+    setMatches(matchesData || []);
     setTeams(sortedTeams);
     setTournaments(sortedTournaments);
   }
@@ -80,11 +99,13 @@ export default function Matches() {
   }
 
   async function onSubmit(data) {
+    if (!user?.id) return;
     if (editingMatch) {
         await updateMatch(editingMatch.id, data);
     } else {
-        await createMatch(data);
+        await createMatch(user.id, data);
     }
+    invalidateCache('matches');
     setIsModalOpen(false);
     reset();
     setEditingMatch(null);
@@ -100,6 +121,7 @@ export default function Matches() {
     if (!itemToDelete) return;
     try {
       await deleteMatch(itemToDelete);
+      invalidateCache('matches');
       loadData();
       // Remove from selection if selected
       if (selectedMatches.has(itemToDelete)) {

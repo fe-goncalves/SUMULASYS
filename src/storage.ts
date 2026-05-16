@@ -55,15 +55,10 @@ interface AppData {
   matches: Match[];
 }
 
-async function getUserId() {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.user?.id;
-}
-
 export const storage = {
   // Teams
-  getTeams: async () => {
-    const { data, error } = await supabase.from('teams').select('*');
+  getTeams: async (userId: string) => {
+    const { data, error } = await supabase.from('teams').select('*').eq('user_id', userId);
     if (error) throw error;
     return data;
   },
@@ -76,8 +71,7 @@ export const storage = {
     
     return { ...team, athletes: athletes || [], committee: committee || [] };
   },
-  createTeam: async (team: Team) => {
-    const user_id = await getUserId();
+  createTeam: async (userId: string, team: Team) => {
     const { data, error } = await supabase.from('teams').insert([{ ...team, user_id }]).select().single();
     if (error) throw error;
     return data;
@@ -97,10 +91,10 @@ export const storage = {
   },
 
   // Athletes
-  getAthletes: async () => {
-    const { data: athletes, error } = await supabase.from('athletes').select('*');
+  getAthletes: async (userId: string) => {
+    const { data: athletes, error } = await supabase.from('athletes').select('*').eq('user_id', userId);
     if (error) throw error;
-    const { data: teams } = await supabase.from('teams').select('id, fullname, shortname, logotype');
+    const { data: teams } = await supabase.from('teams').select('id, fullname, shortname, logotype').eq('user_id', userId);
     
     return athletes.map(a => {
       const team = teams?.find(t => t.id === a.team_id);
@@ -112,9 +106,8 @@ export const storage = {
       };
     });
   },
-  createAthlete: async (athlete: Athlete) => {
-    const user_id = await getUserId();
-    const { data, error } = await supabase.from('athletes').insert([{ ...athlete, user_id }]).select().single();
+  createAthlete: async (userId: string, athlete: Athlete) => {
+    const { data, error } = await supabase.from('athletes').insert([{ ...athlete, user_id: userId }]).select().single();
     if (error) throw error;
     return data;
   },
@@ -129,10 +122,10 @@ export const storage = {
   },
 
   // Committee
-  getCommittee: async () => {
-    const { data: committee, error } = await supabase.from('committee').select('*');
+  getCommittee: async (userId: string) => {
+    const { data: committee, error } = await supabase.from('committee').select('*').eq('user_id', userId);
     if (error) throw error;
-    const { data: teams } = await supabase.from('teams').select('id, fullname, shortname, logotype');
+    const { data: teams } = await supabase.from('teams').select('id, fullname, shortname, logotype').eq('user_id', userId);
 
     return committee.map(c => {
       const team = teams?.find(t => t.id === c.team_id);
@@ -144,9 +137,8 @@ export const storage = {
       };
     });
   },
-  createCommittee: async (member: CommitteeMember) => {
-    const user_id = await getUserId();
-    const { data, error } = await supabase.from('committee').insert([{ ...member, user_id }]).select().single();
+  createCommittee: async (userId: string, member: CommitteeMember) => {
+    const { data, error } = await supabase.from('committee').insert([{ ...member, user_id: userId }]).select().single();
     if (error) throw error;
     return data;
   },
@@ -161,8 +153,8 @@ export const storage = {
   },
 
   // Tournaments
-  getTournaments: async () => {
-    const { data, error } = await supabase.from('tournaments').select('*');
+  getTournaments: async (userId: string) => {
+    const { data, error } = await supabase.from('tournaments').select('*').eq('user_id', userId);
     if (error) throw error;
     return data;
   },
@@ -191,9 +183,8 @@ export const storage = {
 
     return { ...tournament, matches: enrichedMatches };
   },
-  createTournament: async (tournament: Tournament) => {
-    const user_id = await getUserId();
-    const { data, error } = await supabase.from('tournaments').insert([{ ...tournament, user_id }]).select().single();
+  createTournament: async (userId: string, tournament: Tournament) => {
+    const { data, error } = await supabase.from('tournaments').insert([{ ...tournament, user_id: userId }]).select().single();
     if (error) throw error;
     return data;
   },
@@ -209,12 +200,12 @@ export const storage = {
   },
 
   // Matches
-  getMatches: async () => {
-    const { data: matches, error } = await supabase.from('matches').select('*');
+  getMatches: async (userId: string) => {
+    const { data: matches, error } = await supabase.from('matches').select('*').eq('user_id', userId);
     if (error) throw error;
     
-    const { data: tournaments } = await supabase.from('tournaments').select('id, fullname, logotype');
-    const { data: teams } = await supabase.from('teams').select('id, fullname, shortname, logotype');
+    const { data: tournaments } = await supabase.from('tournaments').select('id, fullname, logotype').eq('user_id', userId);
+    const { data: teams } = await supabase.from('teams').select('id, fullname, shortname, logotype').eq('user_id', userId);
 
     return matches.map(m => {
       const tournament = tournaments?.find(t => t.id === m.tournament_id);
@@ -264,9 +255,8 @@ export const storage = {
         team_b: { ...teamB, athletes: teamBAthletes, committee: teamBCommittee }
     };
   },
-  createMatch: async (matchData: any) => {
-    const user_id = await getUserId();
-    const { data: matches } = await supabase.from('matches').select('id');
+  createMatch: async (userId: string, matchData: any) => {
+    const { data: matches } = await supabase.from('matches').select('id').eq('user_id', userId);
     
     let maxNum = 0;
     (matches || []).forEach(m => {
@@ -278,7 +268,7 @@ export const storage = {
     });
     const nextNum = maxNum + 1;
     const id = `GAME ${nextNum}`;
-    const newMatch = { ...matchData, id, code: id, user_id };
+    const newMatch = { ...matchData, id, code: id, user_id: userId };
     
     const { data, error } = await supabase.from('matches').insert([newMatch]).select().single();
     if (error) throw error;

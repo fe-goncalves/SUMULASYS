@@ -76,7 +76,7 @@ export default function TeamDetail() {
       setValue('surname', item.surname);
       setValue('id', item.id);
       
-      if (item.date_of_birth) {
+      if (activeTab === 'athletes' && item.date_of_birth) {
         const [year, month, day] = item.date_of_birth.split('-');
         setValue('date_of_birth', `${day}/${month}/${year}`);
       } else {
@@ -89,7 +89,8 @@ export default function TeamDetail() {
 
   async function onSubmit(data) {
     let formattedData = { ...data };
-    if (data.date_of_birth) {
+    // Only format date for athletes
+    if (activeTab === 'athletes' && data.date_of_birth) {
       const parts = data.date_of_birth.split('/');
       if (parts.length === 3) {
         const [day, month, year] = parts;
@@ -200,6 +201,8 @@ export default function TeamDetail() {
       setDeleteType(null);
   }
 
+  if (!team) return <div className="text-white">Loading...</div>;
+
   function formatDate(dateStr) {
       if (!dateStr) return '';
       // Assuming dateStr is YYYY-MM-DD
@@ -209,8 +212,6 @@ export default function TeamDetail() {
       }
       return dateStr;
   }
-
-  if (!team) return <div className="text-white">Loading...</div>;
 
   return (
     <div className="space-y-8" style={{ '--team-color': dominantColor } as React.CSSProperties}>
@@ -294,14 +295,14 @@ export default function TeamDetail() {
             </button>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overfloactiveTab === 'athletes' ? 5 : w-x-auto">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-white/5 text-gray-400 text-xs uppercase tracking-wider font-medium">
                   <th className="px-4 py-3">RG (ID)</th>
                   <th className="px-4 py-3">Full Name</th>
                   <th className="px-4 py-3">Surname</th>
-                  <th className="px-4 py-3">Date of Birth</th>
+                  {activeTab === 'athletes' && <th className="px-4 py-3">Date of Birth</th>}
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -311,7 +312,7 @@ export default function TeamDetail() {
                     <td className="px-4 py-4 font-mono text-gray-400 text-sm">{item.id}</td>
                     <td className="px-4 py-4 font-medium text-white">{item.fullname}</td>
                     <td className="px-4 py-4 text-gray-400">{item.surname}</td>
-                    <td className="px-4 py-4 text-gray-400 text-sm">{formatDate(item.date_of_birth)}</td>
+                    {activeTab === 'athletes' && <td className="px-4 py-4 text-gray-400 text-sm">{formatDate(item.date_of_birth)}</td>}
                     <td className="px-4 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button onClick={() => openEditModal(item)} className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors">
                         <Edit size={16} />
@@ -324,7 +325,7 @@ export default function TeamDetail() {
                 ))}
                 {(activeTab === 'athletes' ? team.athletes : team.committee).length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-gray-500">
+                    <td colSpan={4} className="py-12 text-center text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         {activeTab === 'athletes' ? <User size={32} className="text-gray-700 mb-2" /> : <Briefcase size={32} className="text-gray-700 mb-2" />}
                         <p>No {activeTab === 'athletes' ? 'athletes' : 'members'} added yet.</p>
@@ -358,18 +359,20 @@ export default function TeamDetail() {
                 <label className="block text-sm font-medium text-gray-400 mb-1.5">RG (ID - Numbers Only)</label>
                 <input {...register('id', { required: true, pattern: /^[0-9]+$/ })} className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50 font-mono" placeholder="123456789" />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5">Date of Birth</label>
-                <input 
-                  type="text" 
-                  placeholder="DD/MM/YYYY"
-                  {...register('date_of_birth', { 
-                      required: true,
-                      pattern: /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[012])\/(19|20)\d\d$/
-                  })} 
-                  className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50" 
-                />
-              </div>
+              {activeTab === 'athletes' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1.5">Date of Birth</label>
+                  <input 
+                    type="text" 
+                    placeholder="DD/MM/YYYY"
+                    {...register('date_of_birth', { 
+                        required: true,
+                        pattern: /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[012])\/(19|20)\d\d$/
+                    })} 
+                    className="w-full glass-input rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:ring-1 focus:ring-orange-500/50" 
+                  />
+                </div>
+              )}
               
               {editingItem && (
                   <div>

@@ -6,9 +6,11 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useCache } from '../contexts/CacheContext';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Athletes() {
   usePageTitle('Athletes');
+  const { user } = useAuth();
   const [athletes, setAthletes] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,23 +28,26 @@ export default function Athletes() {
   const { setCacheData, getCacheData, isCacheFresh, invalidateCache } = useCache();
 
   useEffect(() => {
-    loadInitialData();
-  }, []);
+    if (user?.id) {
+      loadInitialData();
+    }
+  }, [user?.id]);
 
   async function loadInitialData() {
+    if (!user?.id) return;
     try {
       setLoading(true);
       
       let athletesData = getCacheData('athletes');
       if (!athletesData || !isCacheFresh('athletes')) {
         // Load all athletes, assuming not too many, set high limit
-        athletesData = await fetchAthletes(10000, 0);
+        athletesData = await fetchAthletes(user.id, 10000, 0);
         setCacheData('athletes', athletesData || []);
       }
       
       let teamsData = getCacheData('teams');
       if (!teamsData || !isCacheFresh('teams')) {
-        teamsData = await fetchTeams();
+        teamsData = await fetchTeams(user.id);
         setCacheData('teams', teamsData || []);
       }
       
@@ -100,12 +105,12 @@ export default function Athletes() {
   }
 
   async function handleConfirmSave() {
-    if (!pendingData) return;
+    if (!pendingData || !user?.id) return;
     try {
       if (editingItem) {
         await updateAthlete(editingItem.id, pendingData);
       } else {
-        await createAthlete(pendingData);
+        await createAthlete(user.id, pendingData);
       }
       invalidateCache('athletes');
       setIsModalOpen(false);

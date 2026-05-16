@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { getCachedData, setCachedData, clearCache } from '../utils/cache';
 
 interface CacheState {
   teams: any[] | null;
@@ -6,20 +7,17 @@ interface CacheState {
   committee: any[] | null;
   tournaments: any[] | null;
   matches: any[] | null;
-  lastUpdated: Record<string, number>;
 }
 
 interface CacheContextType {
   cache: CacheState;
-  setCacheData: (key: keyof Omit<CacheState, 'lastUpdated'>, data: any[]) => void;
-  getCacheData: (key: keyof Omit<CacheState, 'lastUpdated'>) => any[] | null;
-  invalidateCache: (key?: keyof Omit<CacheState, 'lastUpdated'>) => void;
-  isCacheFresh: (key: keyof Omit<CacheState, 'lastUpdated'>, maxAge?: number) => boolean;
+  setCacheData: (key: keyof CacheState, data: any[]) => void;
+  getCacheData: (key: keyof CacheState) => any[] | null;
+  invalidateCache: (key?: keyof CacheState) => void;
+  isCacheFresh: (key: keyof CacheState) => boolean;
 }
 
 const CacheContext = createContext<CacheContextType | undefined>(undefined);
-
-const DEFAULT_MAX_AGE = 30 * 60 * 1000; // 30 minutes
 
 export const CacheProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [cache, setCache] = useState<CacheState>({
@@ -28,34 +26,45 @@ export const CacheProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     committee: null,
     tournaments: null,
     matches: null,
-    lastUpdated: {},
   });
 
-  const setCacheData = useCallback((key: keyof Omit<CacheState, 'lastUpdated'>, data: any[]) => {
+  // Load cache from localStorage on mount
+  useEffect(() => {
+    const keys: (keyof CacheState)[] = ['teams', 'athletes', 'committee', 'tournaments', 'matches'];
+    const loadedCache: Partial<CacheState> = {};
+
+    keys.forEach(key => {
+      const data = getCachedData(key);
+      if (data) {
+        loadedCache[key] = data;
+      }
+    });
+
     setCache(prev => ({
       ...prev,
-      [key]: data,
-      lastUpdated: {
-        ...prev.lastUpdated,
-        [key]: Date.now(),
-      },
+      ...loadedCache,
     }));
   }, []);
 
-  const getCacheData = useCallback((key: keyof Omit<CacheState, 'lastUpdated'>) => {
+  const setCacheData = useCallback((key: keyof CacheState, data: any[]) => {
+    setCache(prev => ({
+      ...prev,
+      [key]: data,
+    }));
+    setCachedData(key, data);
+  }, []);
+
+  const getCacheData = useCallback((key: keyof CacheState) => {
     return cache[key];
   }, [cache]);
 
-  const invalidateCache = useCallback((key?: keyof Omit<CacheState, 'lastUpdated'>) => {
+  const invalidateCache = useCallback((key?: keyof CacheState) => {
     if (key) {
       setCache(prev => ({
         ...prev,
         [key]: null,
-        lastUpdated: {
-          ...prev.lastUpdated,
-          [key]: 0,
-        },
       }));
+      clearCache(key);
     } else {
       setCache({
         teams: null,
@@ -63,15 +72,14 @@ export const CacheProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         committee: null,
         tournaments: null,
         matches: null,
-        lastUpdated: {},
       });
+      clearCache();
     }
   }, []);
 
-  const isCacheFresh = useCallback((key: keyof Omit<CacheState, 'lastUpdated'>, maxAge = DEFAULT_MAX_AGE) => {
-    const lastUpdate = cache.lastUpdated[key] || 0;
-    return cache[key] !== null && (Date.now() - lastUpdate < maxAge);
-  }, [cache]);
+  const isCacheFresh = useCallback((key: keyof CacheState) => {
+    return getCachedData(key) !== null;
+  }, []);
 
   return (
     <CacheContext.Provider value={{ cache, setCacheData, getCacheData, invalidateCache, isCacheFresh }}>

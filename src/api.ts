@@ -3,18 +3,11 @@ import { getCachedData, setCachedData, clearCache } from './utils/cache';
 
 export const API_URL = ''; // Not used anymore
 
-const getUserId = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('User not authenticated');
-  return user.id;
-};
-
 const getCacheKey = (base: string, userId: string) => `${base}_${userId}`;
 const getPagingCacheKey = (base: string, userId: string, limit: number, offset: number) => `${base}_${userId}_${limit}_${offset}`;
 
 // Teams
-export async function fetchTeams() {
-  const userId = await getUserId();
+export async function fetchTeams(userId: string) {
   const cacheKey = getCacheKey('teams', userId);
   const cached = getCachedData(cacheKey);
   if (cached) return cached;
@@ -36,9 +29,8 @@ export async function fetchTeam(id: string) {
   return { ...team, athletes: athletes || [], committee: committee || [] };
 }
 
-export async function createTeam(data: any) {
-  const user_id = await getUserId();
-  const { data: newTeam, error } = await supabase.from('teams').insert({ ...data, user_id }).select().single();
+export async function createTeam(userId: string, data: any) {
+  const { data: newTeam, error } = await supabase.from('teams').insert({ ...data, user_id: userId }).select().single();
   if (error) throw error;
   clearCache('teams');
   return newTeam;
@@ -58,8 +50,7 @@ export async function deleteTeam(id: string) {
 }
 
 // Athletes
-export async function fetchAthletes(limit: number = 500, offset: number = 0) {
-  const userId = await getUserId();
+export async function fetchAthletes(userId: string, limit: number = 500, offset: number = 0) {
   const cacheKey = getPagingCacheKey('athletes', userId, limit, offset);
   const cached = getCachedData(cacheKey);
   if (cached) return cached;
@@ -92,8 +83,7 @@ export async function fetchAthletes(limit: number = 500, offset: number = 0) {
   return processedData;
 }
 
-export async function fetchAthletesCount() {
-  const userId = await getUserId();
+export async function fetchAthletesCount(userId: string) {
   const { count, error } = await supabase
     .from('athletes')
     .select('id', { count: 'estimated', head: true })
@@ -103,9 +93,8 @@ export async function fetchAthletesCount() {
   return count || 0;
 }
 
-export async function createAthlete(data: any) {
-  const user_id = await getUserId();
-  const { data: newAthlete, error } = await supabase.from('athletes').insert({ ...data, user_id }).select().single();
+export async function createAthlete(userId: string, data: any) {
+  const { data: newAthlete, error } = await supabase.from('athletes').insert({ ...data, user_id: userId }).select().single();
   if (error) throw error;
   clearCache('athletes');
   return newAthlete;
@@ -125,8 +114,7 @@ export async function deleteAthlete(id: string) {
 }
 
 // Committee
-export async function fetchCommittee(limit: number = 500, offset: number = 0) {
-  const userId = await getUserId();
+export async function fetchCommittee(userId: string, limit: number = 500, offset: number = 0) {
   const cacheKey = getPagingCacheKey('committee', userId, limit, offset);
   const cached = getCachedData(cacheKey);
   if (cached) return cached;
@@ -159,8 +147,7 @@ export async function fetchCommittee(limit: number = 500, offset: number = 0) {
   return processedData;
 }
 
-export async function fetchCommitteeCount(): Promise<number> {
-  const userId = await getUserId();
+export async function fetchCommitteeCount(userId: string): Promise<number> {
   const { count, error } = await supabase
     .from('committee')
     .select('id', { count: 'estimated', head: true })
@@ -170,9 +157,8 @@ export async function fetchCommitteeCount(): Promise<number> {
   return count || 0;
 }
 
-export async function createCommittee(data: any) {
-  const user_id = await getUserId();
-  const { data: newMember, error } = await supabase.from('committee').insert({ ...data, user_id }).select().single();
+export async function createCommittee(userId: string, data: any) {
+  const { data: newMember, error } = await supabase.from('committee').insert({ ...data, user_id: userId }).select().single();
   if (error) throw error;
   clearCache('committee');
   return newMember;
@@ -192,8 +178,7 @@ export async function deleteCommittee(id: string) {
 }
 
 // Tournaments
-export async function fetchTournaments() {
-  const userId = await getUserId();
+export async function fetchTournaments(userId: string) {
   const cacheKey = getCacheKey('tournaments', userId);
   const cached = getCachedData(cacheKey);
   if (cached) return cached;
@@ -232,9 +217,8 @@ export async function fetchTournament(id: string) {
   return { ...tournament, matches: formattedMatches };
 }
 
-export async function createTournament(data: any) {
-  const user_id = await getUserId();
-  const { data: newTournament, error } = await supabase.from('tournaments').insert({ ...data, user_id }).select().single();
+export async function createTournament(userId: string, data: any) {
+  const { data: newTournament, error } = await supabase.from('tournaments').insert({ ...data, user_id: userId }).select().single();
   if (error) throw error;
   clearCache('tournaments');
   return newTournament;
@@ -254,8 +238,7 @@ export async function deleteTournament(id: string) {
 }
 
 // Matches
-export async function fetchMatches() {
-  const userId = await getUserId();
+export async function fetchMatches(userId: string) {
   const cacheKey = getCacheKey('matches', userId);
   const cached = getCachedData(cacheKey);
   if (cached) return cached;
@@ -337,14 +320,13 @@ export async function fetchMatch(id: string) {
   };
 }
 
-export async function createMatch(data: any) {
-  const user_id = await getUserId();
+export async function createMatch(userId: string, data: any) {
   
   // Find max game number by sorting DESC and taking first record
   const { data: lastMatch } = await supabase
     .from('matches')
     .select('id')
-    .eq('user_id', user_id)
+    .eq('user_id', userId)
     .order('id', { ascending: false })
     .limit(1);
   
@@ -358,7 +340,7 @@ export async function createMatch(data: any) {
   
   const nextNum = maxNum + 1;
   const id = `GAME ${nextNum}`;
-  const newMatch = { ...data, id, code: id, user_id };
+  const newMatch = { ...data, id, code: id, user_id: userId };
   
   const { data: insertedMatch, error } = await supabase.from('matches').insert(newMatch).select().single();
   if (error) throw error;
@@ -381,8 +363,7 @@ export async function deleteMatch(id: string) {
 }
 
 // Backup
-export async function exportData() {
-  const userId = await getUserId();
+export async function exportData(userId: string) {
   
   const [
     { data: teams },
@@ -407,9 +388,8 @@ export async function exportData() {
   };
 }
 
-export async function importData(data: any): Promise<{ success: boolean; error?: string }> {
+export async function importData(userId: string, data: any): Promise<{ success: boolean; error?: string }> {
   try {
-    const user_id = await getUserId();
     
     // Add user_id to all records and sanitize foreign keys and strip extra fields
     const teams = (data.teams || []).map((t: any) => ({ 
@@ -418,7 +398,7 @@ export async function importData(data: any): Promise<{ success: boolean; error?:
       shortname: t.shortname,
       logotype: t.logotype || null,
       main_color: t.main_color || '#f97316',
-      user_id
+      user_id: userId
     }));
     
     const athletes = (data.athletes || []).map((a: any) => ({ 
@@ -427,7 +407,7 @@ export async function importData(data: any): Promise<{ success: boolean; error?:
       surname: a.surname,
       date_of_birth: a.date_of_birth,
       team_id: a.team_id === "" ? null : a.team_id,
-      user_id
+      user_id: userId
     }));
     
     const committee = (data.committee || []).map((c: any) => ({ 
@@ -435,7 +415,7 @@ export async function importData(data: any): Promise<{ success: boolean; error?:
       fullname: c.fullname,
       surname: c.surname,
       team_id: c.team_id === "" ? null : c.team_id,
-      user_id
+      user_id: userId
     }));
     
     const tournaments = (data.tournaments || []).map((t: any) => ({ 

@@ -5,6 +5,7 @@ import { fetchCommittee, createCommittee, updateCommittee, deleteCommittee, fetc
 import ConfirmationModal from '../components/ConfirmationModal';
 import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { useCache } from '../contexts/CacheContext';
 
 const ITEMS_PER_PAGE = 100;
 
@@ -27,6 +28,8 @@ export default function Committee() {
   const [pendingData, setPendingData] = useState<any>(null);
 
   const { register, handleSubmit, reset, setValue } = useForm();
+
+  const { setCacheData, getCacheData, isCacheFresh, invalidateCache } = useCache();
 
   useEffect(() => {
     loadInitialData();
@@ -53,16 +56,25 @@ export default function Committee() {
   async function loadInitialData() {
     try {
       setLoading(true);
-      const [committeeData, teamsData] = await Promise.all([
-        fetchCommittee(ITEMS_PER_PAGE, 0),
-        fetchTeams()
-      ]);
       
-      const sortedTeams = teamsData.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
-      setCommittee(committeeData);
+      let committeeData = getCacheData('committee');
+      if (!committeeData || !isCacheFresh('committee')) {
+        // Load all committee, assuming not too many, set high limit
+        committeeData = await fetchCommittee(10000, 0);
+        setCacheData('committee', committeeData || []);
+      }
+      
+      let teamsData = getCacheData('teams');
+      if (!teamsData || !isCacheFresh('teams')) {
+        teamsData = await fetchTeams();
+        setCacheData('teams', teamsData || []);
+      }
+      
+      const sortedTeams = (teamsData || []).sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
+      setCommittee(committeeData || []);
       setTeams(sortedTeams);
       setPage(1);
-      setHasMore(committeeData.length === ITEMS_PER_PAGE);
+      setHasMore(false); // Since we load all at once
     } catch (error: any) {
       console.error("Failed to load committee:", error);
       alert("Failed to load committee: " + error.message);
@@ -72,21 +84,9 @@ export default function Committee() {
   }
 
   async function loadMoreCommittee() {
-    if (loadingMore || !hasMore) return;
-    
-    try {
-      setLoadingMore(true);
-      const moreData = await fetchCommittee(ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
-      
-      setCommittee(prev => [...prev, ...moreData]);
-      const newPage = page + 1;
-      setPage(newPage);
-      setHasMore(moreData.length === ITEMS_PER_PAGE);
-    } catch (error: any) {
-      console.error("Error loading more committee:", error);
-    } finally {
-      setLoadingMore(false);
-    }
+    // Since we load all at once, no need for more loading
+    // But to keep the code, perhaps remove or adjust
+    // For now, since we have all, set hasMore to false
   }
 
   function openAddModal() {
@@ -124,6 +124,7 @@ export default function Committee() {
       } else {
         await createCommittee(pendingData);
       }
+      invalidateCache('committee');
       setIsModalOpen(false);
       reset();
       setEditingItem(null);
@@ -148,6 +149,7 @@ export default function Committee() {
     if (!itemToDelete) return;
     try {
       await deleteCommittee(itemToDelete);
+      invalidateCache('committee');
       // Reset and reload
       setPage(0);
       setCommittee([]);
