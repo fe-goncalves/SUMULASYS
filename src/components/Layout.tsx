@@ -25,7 +25,12 @@ export default function Layout() {
 
   async function handleExport() {
     try {
-      const data = await exportData();
+      const { user } = useAuth();
+      if (!user?.id) {
+        alert('User not authenticated');
+        return;
+      }
+      const data = await exportData(user.id);
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -56,8 +61,13 @@ export default function Layout() {
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
+        const { user } = useAuth();
+        if (!user?.id) {
+          alert('User not authenticated');
+          return;
+        }
         const json = JSON.parse(e.target?.result as string);
-        const result = await importData(json);
+        const result = await importData(user.id, json);
         if (result.success) {
           alert('Data imported successfully! The page will reload.');
           window.location.reload();

@@ -9,6 +9,7 @@ import TeamCard from '../components/TeamCard';
 import { getDominantColor } from '../utils/colorExtractor';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
+import { useCache } from '../contexts/CacheContext';
 
 export default function Teams() {
   usePageTitle('Teams');

@@ -7,6 +7,8 @@ import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { usePageTitle } from '../hooks/usePageTitle';
+import { useCache } from '../contexts/CacheContext';
 
 export default function Tournaments() {
   usePageTitle('Tournaments');
@@ -119,7 +121,7 @@ export default function Tournaments() {
         if (editingTournament) {
             await updateTournament(editingTournament.id, pendingData);
         } else {
-            await createTournament(pendingData);
+            await createTournament(user.id, pendingData);
         }
         setIsModalOpen(false);
         reset();

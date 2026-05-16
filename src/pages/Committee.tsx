@@ -6,11 +6,13 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useCache } from '../contexts/CacheContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const ITEMS_PER_PAGE = 100;
 
 export default function Committee() {
   usePageTitle('Committee');
+  const { user } = useAuth();
   const [committee, setCommittee] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,13 +62,13 @@ export default function Committee() {
       let committeeData = getCacheData('committee');
       if (!committeeData || !isCacheFresh('committee')) {
         // Load all committee, assuming not too many, set high limit
-        committeeData = await fetchCommittee(10000, 0);
+        committeeData = await fetchCommittee(user.id, 10000, 0);
         setCacheData('committee', committeeData || []);
       }
       
       let teamsData = getCacheData('teams');
       if (!teamsData || !isCacheFresh('teams')) {
-        teamsData = await fetchTeams();
+        teamsData = await fetchTeams(user.id);
         setCacheData('teams', teamsData || []);
       }
       
@@ -122,7 +124,7 @@ export default function Committee() {
       if (editingItem) {
         await updateCommittee(editingItem.id, pendingData);
       } else {
-        await createCommittee(pendingData);
+        await createCommittee(user.id, pendingData);
       }
       invalidateCache('committee');
       setIsModalOpen(false);

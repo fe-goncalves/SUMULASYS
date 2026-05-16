@@ -6,9 +6,11 @@ import { fetchMatch, updateMatch, deleteMatch, fetchTeams, fetchTournaments } fr
 import { generateMatchesPDF } from '../utils/pdfGenerator';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function MatchDetail() {
   usePageTitle('Match Detail');
+  const { user } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
   const [match, setMatch] = useState<any>(null);
@@ -21,14 +23,17 @@ export default function MatchDetail() {
   const { register, handleSubmit, reset, setValue } = useForm();
 
   useEffect(() => {
-    loadData();
-  }, [id]);
+    if (user?.id) {
+      loadData();
+    }
+  }, [id, user?.id]);
 
   async function loadData() {
+    if (!user?.id) return;
     const [matchData, teamsData, tournamentsData] = await Promise.all([
         fetchMatch(id!),
-        fetchTeams(),
-        fetchTournaments()
+        fetchTeams(user.id),
+        fetchTournaments(user.id)
     ]);
     setMatch(matchData);
     setTeams(teamsData);

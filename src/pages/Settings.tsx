@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Download, Upload, AlertTriangle, CheckCircle, FileJson } from 'lucide-react';
 import { exportData, importData } from '../api';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Settings() {
   usePageTitle('Settings');
@@ -14,7 +15,13 @@ export default function Settings() {
     setIsExporting(true);
     setMessage(null);
     try {
-      const data = await exportData();
+      const { user } = useAuth();
+      if (!user?.id) {
+        setMessage({ type: 'error', text: 'User not authenticated' });
+        setIsExporting(false);
+        return;
+      }
+      const data = await exportData(user.id);
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -57,8 +64,14 @@ export default function Settings() {
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
+        const { user } = useAuth();
+        if (!user?.id) {
+          setMessage({ type: 'error', text: 'User not authenticated' });
+          setIsImporting(false);
+          return;
+        }
         const json = JSON.parse(e.target?.result as string);
-        const result = await importData(json);
+        const result = await importData(user.id, json);
         
         if (result && result.success) {
           setMessage({ type: 'success', text: 'Data imported successfully! The page will reload.' });

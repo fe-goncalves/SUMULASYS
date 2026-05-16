@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash, User, Briefcase, Edit } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { fetchTeam, updateTeam, createAthlete, updateAthlete, deleteAthlete, createCommittee, updateCommittee, deleteCommittee, fetchTeams } from '../api';
+import { useAuth } from '../contexts/AuthContext';
 import ConfirmationModal from '../components/ConfirmationModal';
 import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
 import { useDominantColor } from '../hooks/useDominantColor';
@@ -10,6 +11,7 @@ import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function TeamDetail() {
   usePageTitle('Team Detail');
+  const { user } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
   const [team, setTeam] = useState(null);
@@ -32,9 +34,11 @@ export default function TeamDetail() {
   const dominantColor = useDominantColor(team?.logotype, team?.main_color || '#f97316');
 
   useEffect(() => {
-    loadTeam();
-    loadAllTeams();
-  }, [id]);
+    if (user?.id) {
+      loadTeam();
+      loadAllTeams();
+    }
+  }, [id, user?.id]);
 
   async function loadTeam() {
     const data = await fetchTeam(id);
@@ -53,7 +57,8 @@ export default function TeamDetail() {
   }
 
   async function loadAllTeams() {
-      const data = await fetchTeams();
+      if (!user?.id) return;
+      const data = await fetchTeams(user.id);
       const sortedTeams = data.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
       setAllTeams(sortedTeams);
   }
@@ -114,9 +119,9 @@ export default function TeamDetail() {
         } else {
             // Create
             if (activeTab === 'athletes') {
-                await createAthlete({ ...pendingData, team_id: id });
+                await createAthlete(user.id, { ...pendingData, team_id: id });
             } else {
-                await createCommittee({ ...pendingData, team_id: id });
+                await createCommittee(user.id, { ...pendingData, team_id: id });
             }
         }
         setIsModalOpen(false);

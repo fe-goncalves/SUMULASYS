@@ -446,7 +446,7 @@ export async function importData(userId: string, data: any): Promise<{ success: 
       season: t.season,
       logotype: t.logotype || null,
       main_color: t.main_color || '#f97316',
-      user_id
+      user_id: userId
     }));
     
     const matches = (data.matches || []).map((m: any) => ({ 
@@ -458,7 +458,7 @@ export async function importData(userId: string, data: any): Promise<{ success: 
       phase: m.phase,
       round: m.round,
       date: m.date,
-      user_id
+      user_id: userId
     }));
 
     // Insert in order to respect foreign keys
