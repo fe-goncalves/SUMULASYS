@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 export default function Settings() {
   usePageTitle('Settings');
+  const { user } = useAuth();
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -15,7 +16,6 @@ export default function Settings() {
     setIsExporting(true);
     setMessage(null);
     try {
-      const { user } = useAuth();
       if (!user?.id) {
         setMessage({ type: 'error', text: 'User not authenticated' });
         setIsExporting(false);
@@ -64,7 +64,6 @@ export default function Settings() {
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
-        const { user } = useAuth();
         if (!user?.id) {
           setMessage({ type: 'error', text: 'User not authenticated' });
           setIsImporting(false);

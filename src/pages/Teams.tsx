@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { fetchTeams, createTeam, deleteTeam } from '../api';
@@ -9,12 +9,12 @@ import TeamCard from '../components/TeamCard';
 import { getDominantColor } from '../utils/colorExtractor';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
-import { useCache } from '../contexts/CacheContext';
+import { useCachedList } from '../hooks/useCachedList';
 
 export default function Teams() {
   usePageTitle('Teams');
   const { user } = useAuth();
-  const [teams, setTeams] = useState([]);
+  const { data: teams, loading, reload } = useCachedList('teams', fetchTeams);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [teamToDelete, setTeamToDelete] = useState(null);
@@ -23,24 +23,6 @@ export default function Teams() {
   const [pendingData, setPendingData] = useState(null);
 
   const { register, handleSubmit, reset } = useForm();
-  const { setCacheData, getCacheData, isCacheFresh, invalidateCache } = useCache();
-
-  useEffect(() => {
-    if (user?.id) {
-      loadTeams();
-    }
-  }, [user?.id]);
-
-  async function loadTeams() {
-    if (!user?.id) return;
-    let data = getCacheData('teams');
-    if (!data || !isCacheFresh('teams')) {
-      data = await fetchTeams(user.id);
-      setCacheData('teams', data);
-    }
-    const sortedTeams = data.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
-    setTeams(sortedTeams);
-  }
 
   function handleDeleteClick(id, e) {
     e.preventDefault();
@@ -53,8 +35,7 @@ export default function Teams() {
     if (!teamToDelete) return;
     try {
         await deleteTeam(teamToDelete);
-        invalidateCache('teams');
-        loadTeams();
+        reload();
     } catch (error: any) {
         console.error(error);
         alert('Failed to delete team: ' + error.message);
@@ -64,21 +45,15 @@ export default function Teams() {
   }
 
   async function onSubmit(data) {
-    const file = data.logotype[0];
+    const file = data.logotype?.[0] as File | undefined;
+    const { logotype, ...rest } = data;
     if (file) {
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-            const base64Image = reader.result as string;
-            const main_color = await getDominantColor(base64Image);
-            const processedData = { ...data, logotype: base64Image, main_color };
-            setPendingData(processedData);
-            setSummaryModalOpen(true);
-        };
-        reader.readAsDataURL(file);
+        const preview = URL.createObjectURL(file);
+        const main_color = await getDominantColor(preview);
+        setPendingData({ ...rest, logotype: preview, main_color, _file: file });
+        setSummaryModalOpen(true);
     } else {
-        // If no file, ensure logotype is null or empty string if API expects it
-        const processedData = { ...data, logotype: null, main_color: '#f97316' };
-        setPendingData(processedData);
+        setPendingData({ ...rest, logotype: null, main_color: '#f97316' });
         setSummaryModalOpen(true);
     }
   }
@@ -87,10 +62,9 @@ export default function Teams() {
     if (!pendingData || !user?.id) return;
     try {
         await createTeam(user.id, pendingData);
-        invalidateCache('teams');
         setIsModalOpen(false);
         reset();
-        loadTeams();
+        reload();
     } catch (error: any) {
         console.error(error);
         alert('Failed to create team: ' + error.message);
@@ -116,6 +90,12 @@ export default function Teams() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {loading && teams.length === 0 && (
+          <div className="col-span-full p-12 text-center text-gray-500">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            Loading teams...
+          </div>
+        )}
         {teams.map((team: any) => (
           <TeamCard key={team.id} team={team} onDelete={handleDeleteClick} />
         ))}

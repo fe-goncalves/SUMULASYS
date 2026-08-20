@@ -3,10 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Download, Edit, Trash } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { fetchMatch, updateMatch, deleteMatch, fetchTeams, fetchTournaments } from '../api';
-import { generateMatchesPDF } from '../utils/pdfGenerator';
 import ConfirmationModal from '../components/ConfirmationModal';
+import EntityLogo from '../components/EntityLogo';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
+import { useCachedList } from '../hooks/useCachedList';
 
 export default function MatchDetail() {
   usePageTitle('Match Detail');
@@ -14,8 +15,8 @@ export default function MatchDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [match, setMatch] = useState<any>(null);
-  const [teams, setTeams] = useState([]);
-  const [tournaments, setTournaments] = useState([]);
+  const { data: teams } = useCachedList('teams', fetchTeams);
+  const { data: tournaments } = useCachedList('tournaments', fetchTournaments);
   
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -30,19 +31,14 @@ export default function MatchDetail() {
 
   async function loadData() {
     if (!user?.id) return;
-    const [matchData, teamsData, tournamentsData] = await Promise.all([
-        fetchMatch(id!),
-        fetchTeams(user.id),
-        fetchTournaments(user.id)
-    ]);
+    const matchData = await fetchMatch(id!);
     setMatch(matchData);
-    setTeams(teamsData);
-    setTournaments(tournamentsData);
   }
 
-  const generatePDF = () => {
+  const generatePDF = async () => {
     if (!match) return;
-    const doc = generateMatchesPDF([match]);
+    const { generateMatchesPDF } = await import('../utils/pdfGenerator');
+    const doc = await generateMatchesPDF([match]);
     doc.save(`sumula_${match.id}.pdf`);
   };
 
@@ -130,11 +126,7 @@ export default function MatchDetail() {
         <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
           <div className="text-center p-8 glass-panel rounded-2xl border border-white/5 bg-white/5 hover:bg-white/10 transition-colors group">
             <div className="w-32 h-32 bg-dark-800 rounded-full mx-auto mb-6 flex items-center justify-center shadow-xl overflow-hidden ring-4 ring-white/5 group-hover:ring-orange-500/20 transition-all">
-              {match.team_a_logotype ? (
-                <img src={match.team_a_logotype} alt={match.team_a_name} className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-4xl font-bold text-gray-600">{match.team_a_shortname?.[0]}</span>
-              )}
+              <EntityLogo src={match.team_a_logotype} alt={match.team_a_name} fallback={match.team_a_shortname?.[0] || '?'} className="w-full h-full object-cover" />
             </div>
             <h2 className="text-2xl font-bold text-white mb-1">{match.team_a_name}</h2>
             <p className="text-gray-400 font-medium">{match.team_a_shortname}</p>
@@ -147,11 +139,7 @@ export default function MatchDetail() {
 
           <div className="text-center p-8 glass-panel rounded-2xl border border-white/5 bg-white/5 hover:bg-white/10 transition-colors group">
             <div className="w-32 h-32 bg-dark-800 rounded-full mx-auto mb-6 flex items-center justify-center shadow-xl overflow-hidden ring-4 ring-white/5 group-hover:ring-orange-500/20 transition-all">
-              {match.team_b_logotype ? (
-                <img src={match.team_b_logotype} alt={match.team_b_name} className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-4xl font-bold text-gray-600">{match.team_b_shortname?.[0]}</span>
-              )}
+              <EntityLogo src={match.team_b_logotype} alt={match.team_b_name} fallback={match.team_b_shortname?.[0] || '?'} className="w-full h-full object-cover" />
             </div>
             <h2 className="text-2xl font-bold text-white mb-1">{match.team_b_name}</h2>
             <p className="text-gray-400 font-medium">{match.team_b_shortname}</p>

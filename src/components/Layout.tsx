@@ -8,7 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 export default function Layout() {
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -25,7 +25,6 @@ export default function Layout() {
 
   async function handleExport() {
     try {
-      const { user } = useAuth();
       if (!user?.id) {
         alert('User not authenticated');
         return;
@@ -61,7 +60,6 @@ export default function Layout() {
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
-        const { user } = useAuth();
         if (!user?.id) {
           alert('User not authenticated');
           return;

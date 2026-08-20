@@ -1,19 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Plus, Trophy, Edit, Trash } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { fetchTournaments, createTournament, updateTournament, deleteTournament } from '../api';
 import ConfirmationModal from '../components/ConfirmationModal';
 import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
+import EntityLogo from '../components/EntityLogo';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { usePageTitle } from '../hooks/usePageTitle';
-import { useCache } from '../contexts/CacheContext';
+import { useCachedList } from '../hooks/useCachedList';
 
 export default function Tournaments() {
   usePageTitle('Tournaments');
   const { user } = useAuth();
-  const [tournaments, setTournaments] = useState([]);
+  const { data: tournaments, loading, reload } = useCachedList('tournaments', fetchTournaments);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTournament, setEditingTournament] = useState(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -23,24 +24,6 @@ export default function Tournaments() {
   const [pendingData, setPendingData] = useState(null);
 
   const { register, handleSubmit, reset, setValue } = useForm();
-
-  useEffect(() => {
-    if (user?.id) {
-      loadTournaments();
-    }
-  }, [user?.id]);
-
-  async function loadTournaments() {
-    if (!user?.id) return;
-    try {
-      const data = await fetchTournaments(user.id);
-      const sortedTournaments = data.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
-      setTournaments(sortedTournaments);
-    } catch (error: any) {
-      console.error("Failed to load tournaments:", error);
-      alert("Failed to load tournaments: " + error.message);
-    }
-  }
 
   function openAddModal() {
     setEditingTournament(null);
@@ -76,7 +59,7 @@ export default function Tournaments() {
     if (!itemToDelete) return;
     try {
       await deleteTournament(itemToDelete);
-      loadTournaments();
+      reload();
     } catch (error: any) {
       console.error(error);
       alert('Failed to delete tournament: ' + error.message);
@@ -86,47 +69,38 @@ export default function Tournaments() {
   }
 
   async function onSubmit(data) {
-    // Generate ID for new tournaments if not present
     if (!editingTournament) {
         data.id = `${data.fullname} ${data.season}`.toUpperCase();
     }
 
-    const file = data.logotype[0];
-    
-    const prepareSummary = (finalData) => {
-        setPendingData(finalData);
-        setSummaryModalOpen(true);
-    };
+    const file = data.logotype?.[0] as File | undefined;
+    const { logotype, ...rest } = data;
 
     if (file) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const processedData = { ...data, logotype: reader.result };
-            prepareSummary(processedData);
-        };
-        reader.readAsDataURL(file);
+        const preview = URL.createObjectURL(file);
+        setPendingData({ ...rest, logotype: preview, _file: file });
+        setSummaryModalOpen(true);
     } else {
-        if (editingTournament) {
-            data.logotype = editingTournament.logotype; // Keep existing logo
-        } else {
-            data.logotype = null;
-        }
-        prepareSummary(data);
+        setPendingData({
+          ...rest,
+          logotype: editingTournament ? editingTournament.logotype : null,
+        });
+        setSummaryModalOpen(true);
     }
   }
 
   async function handleConfirmSave() {
-    if (!pendingData) return;
+    if (!pendingData || !user?.id) return;
     try {
         if (editingTournament) {
-            await updateTournament(editingTournament.id, pendingData);
+            await updateTournament(editingTournament.id, pendingData, user.id);
         } else {
             await createTournament(user.id, pendingData);
         }
         setIsModalOpen(false);
         reset();
         setEditingTournament(null);
-        loadTournaments();
+        reload();
     } catch (error: any) {
         console.error(error);
         alert('Failed to save tournament: ' + error.message);
@@ -152,6 +126,12 @@ export default function Tournaments() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {loading && tournaments.length === 0 && (
+          <div className="col-span-full p-12 text-center text-gray-500">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            Loading tournaments...
+          </div>
+        )}
         {tournaments.map((tournament) => (
           <Link to={`/tournaments/${tournament.id}`} key={tournament.id}>
             <motion.div 
@@ -176,7 +156,7 @@ export default function Tournaments() {
                 
                 <div className="w-24 h-24 bg-dark-900 rounded-full mb-5 flex items-center justify-center overflow-hidden ring-4 ring-dark-900 group-hover:ring-[var(--hover-color)] transition-all shadow-inner relative z-10 group-hover:shadow-[0_0_20px_var(--hover-color)]">
                 {tournament.logotype ? (
-                    <img src={tournament.logotype} alt={tournament.fullname} className="w-full h-full object-cover" />
+                    <EntityLogo src={tournament.logotype} alt={tournament.fullname} fallback="" className="w-full h-full object-cover" />
                 ) : (
                     <Trophy size={40} className="text-gray-600 group-hover:text-[var(--hover-color)] transition-colors" />
                 )}

@@ -1,22 +1,36 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit, Trash, Download, Search } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { Plus, Edit, Trash, Search } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { fetchAthletes, createAthlete, updateAthlete, deleteAthlete, fetchTeams } from '../api';
 import ConfirmationModal from '../components/ConfirmationModal';
 import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
+import EntityLogo from '../components/EntityLogo';
 import { usePageTitle } from '../hooks/usePageTitle';
-import { useCache } from '../contexts/CacheContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useCachedList } from '../hooks/useCachedList';
+import { usePagedPeople } from '../hooks/usePagedPeople';
 
 export default function Athletes() {
   usePageTitle('Athletes');
   const { user } = useAuth();
-  const [athletes, setAthletes] = useState<any[]>([]);
-  const [teams, setTeams] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const fetchPage = useCallback(
+    (userId: string, args: { limit: number; offset: number; search: string }) =>
+      fetchAthletes(userId, args.limit, args.offset, args.search),
+    [],
+  );
+  const {
+    items: athletes,
+    searchTerm,
+    setSearchTerm,
+    loading,
+    loadingMore,
+    hasMore,
+    observerTarget,
+    reload,
+  } = usePagedPeople(fetchPage);
+  const { data: teams } = useCachedList('teams', fetchTeams);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   
@@ -24,43 +38,6 @@ export default function Athletes() {
   const [pendingData, setPendingData] = useState<any>(null);
 
   const { register, handleSubmit, reset, setValue } = useForm();
-
-  const { setCacheData, getCacheData, isCacheFresh, invalidateCache } = useCache();
-
-  useEffect(() => {
-    if (user?.id) {
-      loadInitialData();
-    }
-  }, [user?.id]);
-
-  async function loadInitialData() {
-    if (!user?.id) return;
-    try {
-      setLoading(true);
-      
-      let athletesData = getCacheData('athletes');
-      if (!athletesData || !isCacheFresh('athletes')) {
-        // Load all athletes, assuming not too many, set high limit
-        athletesData = await fetchAthletes(user.id, 10000, 0);
-        setCacheData('athletes', athletesData || []);
-      }
-      
-      let teamsData = getCacheData('teams');
-      if (!teamsData || !isCacheFresh('teams')) {
-        teamsData = await fetchTeams(user.id);
-        setCacheData('teams', teamsData || []);
-      }
-      
-      const sortedTeams = (teamsData || []).sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
-      setAthletes(athletesData || []);
-      setTeams(sortedTeams);
-    } catch (error: any) {
-      console.error("Failed to load athletes:", error);
-      alert("Failed to load athletes: " + error.message);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   function openAddModal() {
     setEditingItem(null);
@@ -112,11 +89,10 @@ export default function Athletes() {
       } else {
         await createAthlete(user.id, pendingData);
       }
-      invalidateCache('athletes');
       setIsModalOpen(false);
       reset();
       setEditingItem(null);
-      loadInitialData();
+      reload();
     } catch (error: any) {
       console.error("Error saving athlete:", error);
       alert(error.message || "Failed to save athlete. Please try again.");
@@ -134,8 +110,7 @@ export default function Athletes() {
     if (!itemToDelete) return;
     try {
       await deleteAthlete(itemToDelete);
-      invalidateCache('athletes');
-      loadInitialData();
+      reload();
     } catch (error: any) {
       console.error("Error deleting athlete:", error);
       alert("Failed to delete athlete: " + error.message);
@@ -143,13 +118,6 @@ export default function Athletes() {
     setDeleteModalOpen(false);
     setItemToDelete(null);
   }
-
-  const filteredAthletes = useMemo(() => athletes.filter(athlete => 
-    athlete.fullname.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    athlete.surname.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    athlete.id.includes(searchTerm) ||
-    (athlete.team_name && athlete.team_name.toLowerCase().includes(searchTerm.toLowerCase()))
-  ), [athletes, searchTerm]);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
@@ -203,18 +171,19 @@ export default function Athletes() {
                 </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-                {filteredAthletes.map((athlete) => (
+                {athletes.map((athlete) => (
                 <tr key={athlete.id} className="hover:bg-white/5 transition-colors group">
                     <td className="px-6 py-4 font-mono text-gray-400 text-sm">{athlete.id}</td>
                     <td className="px-6 py-4">
-                      {athlete.team_logotype ? (
-                        <div className="w-10 h-10 rounded-lg bg-white/10 p-1 overflow-hidden" title={athlete.team_name}>
-                            <img src={athlete.team_logotype} alt={athlete.team_name} className="w-full h-full object-cover rounded-md" />
+                      {athlete.team_logotype || athlete.team_shortname ? (
+                        <div className="w-10 h-10 rounded-lg bg-white/10 p-1 overflow-hidden flex items-center justify-center" title={athlete.team_name}>
+                            <EntityLogo
+                              src={athlete.team_logotype}
+                              alt={athlete.team_name}
+                              fallback={athlete.team_shortname?.[0] || '-'}
+                              className="w-full h-full object-cover rounded-md"
+                            />
                         </div>
-                      ) : athlete.team_shortname ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-500/10 text-orange-400 border border-orange-500/20">
-                          {athlete.team_shortname}
-                        </span>
                       ) : (
                         <span className="text-gray-600 text-sm">-</span>
                       )}
@@ -232,7 +201,7 @@ export default function Athletes() {
                     </td>
                 </tr>
                 ))}
-                {filteredAthletes.length === 0 && (
+                {athletes.length === 0 && (
                 <tr>
                     <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                       <div className="flex flex-col items-center gap-2">
@@ -244,6 +213,10 @@ export default function Athletes() {
                 )}
             </tbody>
             </table>
+            <div ref={observerTarget} className="p-4 text-center text-gray-500 text-sm">
+              {loadingMore && 'Loading more...'}
+              {!hasMore && athletes.length > 0 && 'All athletes loaded'}
+            </div>
         </div>
         )}
       </div>

@@ -46,10 +46,11 @@ export default function SummaryConfirmationModal({
 
           <div className="bg-white/5 rounded-xl p-4 space-y-3 mb-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
             {Object.entries(data).map(([key, value]) => {
+              if (key.startsWith('_')) return null;
               if (value === null || value === undefined || value === '') return null;
               
               // Handle Logotype/Image preview
-              if (key === 'logotype' && typeof value === 'string' && value.startsWith('data:')) {
+              if (key === 'logotype' && typeof value === 'string' && (value.startsWith('data:') || value.startsWith('blob:') || value.startsWith('http'))) {
                  return (
                     <div key={key} className="flex flex-col gap-1 border-b border-white/5 last:border-0 pb-2 last:pb-0">
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">{key.replace(/_/g, ' ')}</span>

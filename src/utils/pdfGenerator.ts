@@ -1,5 +1,18 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { imageSrcForPdf } from './logoStorage';
+
+const resolveMatchLogos = async (match: any) => {
+  const [teamALogo, teamBLogo] = await Promise.all([
+    imageSrcForPdf(match.team_a?.logotype),
+    imageSrcForPdf(match.team_b?.logotype),
+  ]);
+  return {
+    ...match,
+    team_a: { ...match.team_a, logotype: teamALogo },
+    team_b: { ...match.team_b, logotype: teamBLogo },
+  };
+};
 
 const drawMatchScoreSheet = (doc: jsPDF, match: any) => {
     // A4 Portrait: 210mm x 297mm
@@ -385,15 +398,16 @@ const drawMatchScoreSheet = (doc: jsPDF, match: any) => {
     generateTeamTable(match.team_b, (doc as any).lastAutoTable.finalY + 3);
 };
 
-export const generateMatchPDF = (match: any) => {
+export const generateMatchPDF = async (match: any) => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
-    drawMatchScoreSheet(doc, match);
+    drawMatchScoreSheet(doc, await resolveMatchLogos(match));
     return doc;
 };
 
-export const generateMatchesPDF = (matches: any[]) => {
+export const generateMatchesPDF = async (matches: any[]) => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
-    matches.forEach((match, index) => {
+    const resolved = await Promise.all(matches.map(resolveMatchLogos));
+    resolved.forEach((match, index) => {
         if (index > 0) {
             doc.addPage();
         }

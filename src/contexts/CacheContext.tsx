@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { getCachedData, setCachedData, clearCache } from '../utils/cache';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { getCachedData, setCachedData, clearCache, ListCacheKey } from '../utils/cache';
+import { useAuth } from './AuthContext';
 
 interface CacheState {
   teams: any[] | null;
@@ -11,81 +12,66 @@ interface CacheState {
 
 interface CacheContextType {
   cache: CacheState;
-  setCacheData: (key: keyof CacheState, data: any[]) => void;
-  getCacheData: (key: keyof CacheState) => any[] | null;
-  invalidateCache: (key?: keyof CacheState) => void;
-  isCacheFresh: (key: keyof CacheState) => boolean;
+  revision: number;
+  setCacheData: (key: ListCacheKey, data: any[]) => void;
+  getCacheData: (key: ListCacheKey) => any[] | null;
+  invalidateCache: (key?: ListCacheKey) => void;
 }
+
+const EMPTY_CACHE: CacheState = {
+  teams: null,
+  athletes: null,
+  committee: null,
+  tournaments: null,
+  matches: null,
+};
 
 const CacheContext = createContext<CacheContextType | undefined>(undefined);
 
 export const CacheProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [cache, setCache] = useState<CacheState>({
-    teams: null,
-    athletes: null,
-    committee: null,
-    tournaments: null,
-    matches: null,
-  });
+  const { user } = useAuth();
+  const [cache, setCache] = useState<CacheState>(EMPTY_CACHE);
+  const [revision, setRevision] = useState(0);
 
-  // Load cache from localStorage on mount
   useEffect(() => {
-    const keys: (keyof CacheState)[] = ['teams', 'athletes', 'committee', 'tournaments', 'matches'];
-    const loadedCache: Partial<CacheState> = {};
-
-    keys.forEach(key => {
-      const data = getCachedData(key);
-      if (data) {
-        loadedCache[key] = data;
-      }
-    });
-
-    setCache(prev => ({
-      ...prev,
-      ...loadedCache,
-    }));
-  }, []);
-
-  const setCacheData = useCallback((key: keyof CacheState, data: any[]) => {
-    setCache(prev => ({
-      ...prev,
-      [key]: data,
-    }));
-    setCachedData(key, data);
-  }, []);
-
-  const getCacheData = useCallback((key: keyof CacheState) => {
-    return cache[key];
-  }, [cache]);
-
-  const invalidateCache = useCallback((key?: keyof CacheState) => {
-    if (key) {
-      setCache(prev => ({
-        ...prev,
-        [key]: null,
-      }));
-      clearCache(key);
-    } else {
-      setCache({
-        teams: null,
-        athletes: null,
-        committee: null,
-        tournaments: null,
-        matches: null,
-      });
-      clearCache();
+    if (!user?.id) {
+      setCache(EMPTY_CACHE);
+      return;
     }
-  }, []);
 
-  const isCacheFresh = useCallback((key: keyof CacheState) => {
-    return getCachedData(key) !== null;
-  }, []);
+    const keys: ListCacheKey[] = ['teams', 'athletes', 'committee', 'tournaments', 'matches'];
+    const loaded: Partial<CacheState> = {};
+    keys.forEach((key) => {
+      const data = getCachedData(key, user.id);
+      if (data) loaded[key] = data;
+    });
+    setCache({ ...EMPTY_CACHE, ...loaded });
+  }, [user?.id]);
 
-  return (
-    <CacheContext.Provider value={{ cache, setCacheData, getCacheData, invalidateCache, isCacheFresh }}>
-      {children}
-    </CacheContext.Provider>
+  const setCacheData = useCallback((key: ListCacheKey, data: any[]) => {
+    setCache((prev) => ({ ...prev, [key]: data }));
+    if (user?.id) setCachedData(key, data, user.id);
+  }, [user?.id]);
+
+  const getCacheData = useCallback((key: ListCacheKey) => cache[key], [cache]);
+
+  const invalidateCache = useCallback((key?: ListCacheKey) => {
+    if (key) {
+      setCache((prev) => ({ ...prev, [key]: null }));
+      clearCache(key, user?.id);
+    } else {
+      setCache(EMPTY_CACHE);
+      clearCache(undefined, user?.id);
+    }
+    setRevision((value) => value + 1);
+  }, [user?.id]);
+
+  const value = useMemo(
+    () => ({ cache, revision, setCacheData, getCacheData, invalidateCache }),
+    [cache, revision, setCacheData, getCacheData, invalidateCache],
   );
+
+  return <CacheContext.Provider value={value}>{children}</CacheContext.Provider>;
 };
 
 export const useCache = () => {

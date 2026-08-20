@@ -4,6 +4,7 @@ import { ArrowLeft, Trophy, Calendar, ArrowRight, Edit, Trash } from 'lucide-rea
 import { fetchTournament } from '../api';
 import { motion } from 'framer-motion';
 import { usePageTitle } from '../hooks/usePageTitle';
+import EntityLogo from '../components/EntityLogo';
 
 export default function TournamentDetail() {
   usePageTitle('Tournament Detail');
@@ -47,7 +48,7 @@ export default function TournamentDetail() {
         <div className="flex items-center gap-8 relative z-10">
             <div className="w-32 h-32 bg-dark-800 rounded-full flex items-center justify-center overflow-hidden border-4 border-dark-800 shadow-xl ring-4 ring-white/5" style={{ borderColor: 'var(--tournament-color)' }}>
             {tournament.logotype ? (
-                <img src={tournament.logotype} alt={tournament.fullname} className="w-full h-full object-cover" />
+                <EntityLogo src={tournament.logotype} alt={tournament.fullname} fallback="" className="w-full h-full object-cover" />
             ) : (
                 <Trophy size={48} style={{ color: 'var(--tournament-color)' }} />
             )}
@@ -92,11 +93,7 @@ export default function TournamentDetail() {
                             {/* Team A */}
                             <div className="flex flex-col items-center gap-2 group/team">
                                 <div className="w-16 h-16 bg-dark-900 rounded-full flex items-center justify-center overflow-hidden border-2 border-white/5 shadow-lg relative">
-                                    {match.team_a_logotype ? (
-                                        <img src={match.team_a_logotype} alt={match.team_a_name} className="w-full h-full object-cover" title={match.team_a_name} />
-                                    ) : (
-                                        <span className="text-xl font-bold text-gray-600">{match.team_a_shortname?.[0]}</span>
-                                    )}
+                                    <EntityLogo src={match.team_a_logotype} alt={match.team_a_name} fallback={match.team_a_shortname?.[0] || '?'} className="w-full h-full object-cover" title={match.team_a_name} />
                                 </div>
                                 <span className="text-sm font-medium text-gray-400">{match.team_a_shortname}</span>
                             </div>
@@ -110,11 +107,7 @@ export default function TournamentDetail() {
                             {/* Team B */}
                             <div className="flex flex-col items-center gap-2 group/team">
                                 <div className="w-16 h-16 bg-dark-900 rounded-full flex items-center justify-center overflow-hidden border-2 border-white/5 shadow-lg relative">
-                                    {match.team_b_logotype ? (
-                                        <img src={match.team_b_logotype} alt={match.team_b_name} className="w-full h-full object-cover" title={match.team_b_name} />
-                                    ) : (
-                                        <span className="text-xl font-bold text-gray-600">{match.team_b_shortname?.[0]}</span>
-                                    )}
+                                    <EntityLogo src={match.team_b_logotype} alt={match.team_b_name} fallback={match.team_b_shortname?.[0] || '?'} className="w-full h-full object-cover" title={match.team_b_name} />
                                 </div>
                                 <span className="text-sm font-medium text-gray-400">{match.team_b_shortname}</span>
                             </div>

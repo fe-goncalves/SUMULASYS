@@ -1,95 +1,43 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, Edit, Trash, Download, Search } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { Plus, Edit, Trash, Search } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { fetchCommittee, createCommittee, updateCommittee, deleteCommittee, fetchTeams } from '../api';
 import ConfirmationModal from '../components/ConfirmationModal';
 import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
+import EntityLogo from '../components/EntityLogo';
 import { usePageTitle } from '../hooks/usePageTitle';
-import { useCache } from '../contexts/CacheContext';
 import { useAuth } from '../contexts/AuthContext';
-
-const ITEMS_PER_PAGE = 100;
+import { useCachedList } from '../hooks/useCachedList';
+import { usePagedPeople } from '../hooks/usePagedPeople';
 
 export default function Committee() {
   usePageTitle('Committee');
   const { user } = useAuth();
-  const [committee, setCommittee] = useState<any[]>([]);
-  const [teams, setTeams] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const fetchPage = useCallback(
+    (userId: string, args: { limit: number; offset: number; search: string }) =>
+      fetchCommittee(userId, args.limit, args.offset, args.search),
+    [],
+  );
+  const {
+    items: committee,
+    searchTerm,
+    setSearchTerm,
+    loading,
+    loadingMore,
+    hasMore,
+    observerTarget,
+    reload,
+  } = usePagedPeople(fetchPage);
+  const { data: teams } = useCachedList('teams', fetchTeams);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const observerTarget = useRef<HTMLDivElement>(null);
   
   const [summaryModalOpen, setSummaryModalOpen] = useState(false);
   const [pendingData, setPendingData] = useState<any>(null);
 
   const { register, handleSubmit, reset, setValue } = useForm();
-
-  const { setCacheData, getCacheData, isCacheFresh, invalidateCache } = useCache();
-
-  useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  // Intersection Observer for lazy loading
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      entries => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore) {
-          loadMoreCommittee();
-        }
-      },
-      { threshold: 0.1 }
-    );
-
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current);
-    }
-
-    return () => observer.disconnect();
-  }, [hasMore, loadingMore]);
-
-  async function loadInitialData() {
-    try {
-      setLoading(true);
-      
-      let committeeData = getCacheData('committee');
-      if (!committeeData || !isCacheFresh('committee')) {
-        // Load all committee, assuming not too many, set high limit
-        committeeData = await fetchCommittee(user.id, 10000, 0);
-        setCacheData('committee', committeeData || []);
-      }
-      
-      let teamsData = getCacheData('teams');
-      if (!teamsData || !isCacheFresh('teams')) {
-        teamsData = await fetchTeams(user.id);
-        setCacheData('teams', teamsData || []);
-      }
-      
-      const sortedTeams = (teamsData || []).sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
-      setCommittee(committeeData || []);
-      setTeams(sortedTeams);
-      setPage(1);
-      setHasMore(false); // Since we load all at once
-    } catch (error: any) {
-      console.error("Failed to load committee:", error);
-      alert("Failed to load committee: " + error.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadMoreCommittee() {
-    // Since we load all at once, no need for more loading
-    // But to keep the code, perhaps remove or adjust
-    // For now, since we have all, set hasMore to false
-  }
 
   function openAddModal() {
     setEditingItem(null);
@@ -119,21 +67,17 @@ export default function Committee() {
   }
 
   async function handleConfirmSave() {
-    if (!pendingData) return;
+    if (!pendingData || !user?.id) return;
     try {
       if (editingItem) {
         await updateCommittee(editingItem.id, pendingData);
       } else {
         await createCommittee(user.id, pendingData);
       }
-      invalidateCache('committee');
       setIsModalOpen(false);
       reset();
       setEditingItem(null);
-      // Reset and reload
-      setPage(0);
-      setCommittee([]);
-      loadInitialData();
+      reload();
     } catch (error: any) {
       console.error("Error saving member:", error);
       alert(error.message || "Failed to save member. Please try again.");
@@ -151,11 +95,7 @@ export default function Committee() {
     if (!itemToDelete) return;
     try {
       await deleteCommittee(itemToDelete);
-      invalidateCache('committee');
-      // Reset and reload
-      setPage(0);
-      setCommittee([]);
-      loadInitialData();
+      reload();
     } catch (error: any) {
       console.error("Error deleting member:", error);
       alert("Failed to delete member: " + error.message);
@@ -163,13 +103,6 @@ export default function Committee() {
     setDeleteModalOpen(false);
     setItemToDelete(null);
   }
-
-  const filteredCommittee = useMemo(() => committee.filter(member => 
-    member.fullname.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.surname.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.id.includes(searchTerm) ||
-    (member.team_name && member.team_name.toLowerCase().includes(searchTerm.toLowerCase()))
-  ), [committee, searchTerm]);
 
   return (
     <div className="space-y-8">
@@ -216,18 +149,19 @@ export default function Committee() {
                 </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-                {filteredCommittee.map((member) => (
+                {committee.map((member) => (
                 <tr key={member.id} className="hover:bg-white/5 transition-colors group">
                     <td className="px-6 py-4 font-mono text-gray-400 text-sm">{member.id}</td>
                     <td className="px-6 py-4">
-                      {member.team_logotype ? (
-                        <div className="w-10 h-10 rounded-lg bg-white/10 p-1 overflow-hidden" title={member.team_name}>
-                            <img src={member.team_logotype} alt={member.team_name} className="w-full h-full object-cover rounded-md" />
+                      {member.team_logotype || member.team_shortname ? (
+                        <div className="w-10 h-10 rounded-lg bg-white/10 p-1 overflow-hidden flex items-center justify-center" title={member.team_name}>
+                            <EntityLogo
+                              src={member.team_logotype}
+                              alt={member.team_name}
+                              fallback={member.team_shortname?.[0] || '-'}
+                              className="w-full h-full object-cover rounded-md"
+                            />
                         </div>
-                      ) : member.team_shortname ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-500/10 text-orange-400 border border-orange-500/20">
-                          {member.team_shortname}
-                        </span>
                       ) : (
                         <span className="text-gray-600 text-sm">-</span>
                       )}
@@ -244,9 +178,9 @@ export default function Committee() {
                     </td>
                 </tr>
                 ))}
-                {filteredCommittee.length === 0 && (
+                {committee.length === 0 && (
                 <tr>
-                    <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         <Search size={32} className="text-gray-700 mb-2" />
                         <p>No committee members found matching your search.</p>
@@ -257,17 +191,10 @@ export default function Committee() {
             </tbody>
             </table>
             
-            {/* Lazy load trigger */}
-            {hasMore && filteredCommittee.length > 0 && (
-              <div ref={observerTarget} className="p-4 text-center">
-                {loadingMore && (
-                  <div className="flex items-center justify-center gap-2 text-gray-500">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b border-orange-500"></div>
-                    <span>Loading more...</span>
-                  </div>
-                )}
-              </div>
-            )}
+            <div ref={observerTarget} className="p-4 text-center text-gray-500 text-sm">
+              {loadingMore && 'Loading more...'}
+              {!hasMore && committee.length > 0 && 'All members loaded'}
+            </div>
         </div>
         )}
       </div>

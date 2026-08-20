@@ -6,8 +6,11 @@ import { fetchTeam, updateTeam, createAthlete, updateAthlete, deleteAthlete, cre
 import { useAuth } from '../contexts/AuthContext';
 import ConfirmationModal from '../components/ConfirmationModal';
 import SummaryConfirmationModal from '../components/SummaryConfirmationModal';
-import { useDominantColor } from '../hooks/useDominantColor';
+import EntityLogo from '../components/EntityLogo';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { useCachedList } from '../hooks/useCachedList';
+import { useCache } from '../contexts/CacheContext';
+import { getDominantColor } from '../utils/colorExtractor';
 
 export default function TeamDetail() {
   usePageTitle('Team Detail');
@@ -15,7 +18,8 @@ export default function TeamDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [team, setTeam] = useState(null);
-  const [allTeams, setAllTeams] = useState([]);
+  const { data: allTeams } = useCachedList('teams', fetchTeams);
+  const { invalidateCache } = useCache();
   const [activeTab, setActiveTab] = useState('athletes'); // 'athletes' or 'committee'
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditTeamModalOpen, setIsEditTeamModalOpen] = useState(false);
@@ -31,12 +35,11 @@ export default function TeamDetail() {
   const { register, handleSubmit, reset, setValue } = useForm();
   const { register: registerEdit, handleSubmit: handleSubmitEdit, reset: resetEdit, setValue: setValueEdit } = useForm();
 
-  const dominantColor = useDominantColor(team?.logotype, team?.main_color || '#f97316');
+  const accent = team?.main_color || '#f97316';
 
   useEffect(() => {
     if (user?.id) {
       loadTeam();
-      loadAllTeams();
     }
   }, [id, user?.id]);
 
@@ -54,13 +57,6 @@ export default function TeamDetail() {
         setValueEdit('fullname', data.fullname);
         setValueEdit('shortname', data.shortname);
     }
-  }
-
-  async function loadAllTeams() {
-      if (!user?.id) return;
-      const data = await fetchTeams(user.id);
-      const sortedTeams = data.sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
-      setAllTeams(sortedTeams);
   }
 
   function openAddModal() {
@@ -135,31 +131,24 @@ export default function TeamDetail() {
   }
 
   async function onEditTeamSubmit(data) {
-      const file = data.logotype[0];
-      
-      const prepareSummary = (finalData) => {
-          setPendingData(finalData);
-          setPendingAction('saveTeam');
-          setSummaryModalOpen(true);
-      };
+      const file = data.logotype?.[0] as File | undefined;
+      const { logotype, ...rest } = data;
 
       if (file) {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-              const processedData = { ...data, logotype: reader.result };
-              prepareSummary(processedData);
-          };
-          reader.readAsDataURL(file);
+          const preview = URL.createObjectURL(file);
+          const main_color = await getDominantColor(preview);
+          setPendingData({ ...rest, logotype: preview, main_color, _file: file });
       } else {
-          // Keep existing logotype if not changed
-          const processedData = { ...data, logotype: team.logotype };
-          prepareSummary(processedData);
+          setPendingData({ ...rest, logotype: team.logotype, main_color: team.main_color });
       }
+      setPendingAction('saveTeam');
+      setSummaryModalOpen(true);
   }
 
   async function handleConfirmSaveTeam() {
       try {
-          await updateTeam(id, pendingData);
+          await updateTeam(id, pendingData, user?.id);
+          invalidateCache('teams');
           setIsEditTeamModalOpen(false);
           loadTeam();
       } catch (error) {
@@ -219,7 +208,7 @@ export default function TeamDetail() {
   }
 
   return (
-    <div className="space-y-8" style={{ '--team-color': dominantColor } as React.CSSProperties}>
+    <div className="space-y-8" style={{ '--team-color': accent } as React.CSSProperties}>
       <button onClick={() => navigate('/teams')} className="flex items-center text-gray-400 hover:text-white transition group">
         <ArrowLeft size={20} className="mr-2 group-hover:-translate-x-1 transition-transform" /> Back to Teams
       </button>
@@ -237,7 +226,7 @@ export default function TeamDetail() {
         <div className="flex items-center gap-8 relative z-10">
             <div className="w-32 h-32 bg-dark-800 rounded-full flex items-center justify-center overflow-hidden border-4 border-dark-800 shadow-xl ring-4 ring-white/5" style={{ borderColor: 'var(--team-color)' }}>
             {team.logotype ? (
-                <img src={team.logotype} alt={team.fullname} className="w-full h-full object-cover" />
+                <EntityLogo src={team.logotype} alt={team.fullname} fallback={team.shortname?.[0] || '?'} className="w-full h-full object-cover" />
             ) : (
                 <span className="text-4xl font-bold text-gray-600" style={{ color: 'var(--team-color)' }}>{team.shortname?.[0]}</span>
             )}

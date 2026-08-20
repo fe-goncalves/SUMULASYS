@@ -1,21 +1,21 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Calendar, ArrowRight, Trash, Edit, Download, CheckSquare, Square, Trophy } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { fetchMatches, createMatch, fetchTeams, fetchTournaments, deleteMatch, updateMatch, fetchMatch } from '../api';
-import { generateMatchesPDF } from '../utils/pdfGenerator';
 import ConfirmationModal from '../components/ConfirmationModal';
+import EntityLogo from '../components/EntityLogo';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
-import { useCache } from '../contexts/CacheContext';
+import { useCachedList } from '../hooks/useCachedList';
 
 export default function Matches() {
   usePageTitle('Matches');
   const { user } = useAuth();
-  const [matches, setMatches] = useState([]);
-  const [teams, setTeams] = useState([]);
-  const [tournaments, setTournaments] = useState([]);
+  const { data: matches, reload: reloadMatches } = useCachedList('matches', fetchMatches);
+  const { data: teams } = useCachedList('teams', fetchTeams);
+  const { data: tournaments } = useCachedList('tournaments', fetchTournaments);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMatch, setEditingMatch] = useState(null);
   const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
@@ -27,53 +27,19 @@ export default function Matches() {
   
   const { register, handleSubmit, reset, setValue } = useForm();
 
-  const { setCacheData, getCacheData, isCacheFresh, invalidateCache } = useCache();
-
-  useEffect(() => {
-    if (user?.id) {
-      loadData();
-    }
-  }, [user?.id]);
-
-  async function loadData() {
-    if (!user?.id) return;
-    let matchesData = getCacheData('matches');
-    if (!matchesData || !isCacheFresh('matches')) {
-      matchesData = await fetchMatches(user.id);
-      setCacheData('matches', matchesData || []);
-    }
-    
-    let teamsData = getCacheData('teams');
-    if (!teamsData || !isCacheFresh('teams')) {
-      teamsData = await fetchTeams(user.id);
-      setCacheData('teams', teamsData || []);
-    }
-    
-    let tournamentsData = getCacheData('tournaments');
-    if (!tournamentsData || !isCacheFresh('tournaments')) {
-      tournamentsData = await fetchTournaments(user.id);
-      setCacheData('tournaments', tournamentsData || []);
-    }
-    
-    const sortedTeams = (teamsData || []).sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
-    const sortedTournaments = (tournamentsData || []).sort((a: any, b: any) => (a.fullname || '').localeCompare(b.fullname || ''));
-    
-    setMatches(matchesData || []);
-    setTeams(sortedTeams);
-    setTournaments(sortedTournaments);
-  }
-
-  const filteredMatches = matches
-    .filter((match: any) => {
-      if (filterDate && match.date !== filterDate) return false;
-      if (filterTournament && match.tournament_id !== filterTournament) return false;
-      return true;
-    })
-    .sort((a: any, b: any) => {
-      const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
-      if (dateDiff !== 0) return dateDiff;
-      return (a.phase || '').localeCompare(b.phase || '');
-    });
+  const filteredMatches = useMemo(() => (
+    matches
+      .filter((match: any) => {
+        if (filterDate && match.date !== filterDate) return false;
+        if (filterTournament && match.tournament_id !== filterTournament) return false;
+        return true;
+      })
+      .sort((a: any, b: any) => {
+        const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+        if (dateDiff !== 0) return dateDiff;
+        return (a.phase || '').localeCompare(b.phase || '');
+      })
+  ), [matches, filterDate, filterTournament]);
 
   function openAddModal() {
     setEditingMatch(null);
@@ -107,11 +73,10 @@ export default function Matches() {
       } else {
           await createMatch(user.id, data);
       }
-      invalidateCache('matches');
       setIsModalOpen(false);
       reset();
       setEditingMatch(null);
-      loadData();
+      reloadMatches();
     } catch (error: any) {
       console.error('Error saving match:', error);
       alert('Error saving match: ' + (error.message || 'Unknown error'));
@@ -127,8 +92,7 @@ export default function Matches() {
     if (!itemToDelete) return;
     try {
       await deleteMatch(itemToDelete);
-      invalidateCache('matches');
-      loadData();
+      reloadMatches();
       // Remove from selection if selected
       if (selectedMatches.has(itemToDelete)) {
           const newSelection = new Set(selectedMatches);
@@ -176,7 +140,8 @@ export default function Matches() {
           }
           
           if (fullMatches.length > 0) {
-              const doc = generateMatchesPDF(fullMatches);
+              const { generateMatchesPDF } = await import('../utils/pdfGenerator');
+              const doc = await generateMatchesPDF(fullMatches);
               doc.save("sumulas_export.pdf");
           }
           
@@ -264,11 +229,7 @@ export default function Matches() {
                 {/* Team A */}
                 <div className="flex flex-col items-center gap-2 group/team">
                     <div className="w-16 h-16 bg-dark-900 rounded-full flex items-center justify-center overflow-hidden border-2 border-white/5 shadow-lg group-hover/team:border-orange-500/50 transition-all relative">
-                        {match.team_a_logotype ? (
-                            <img src={match.team_a_logotype} alt={match.team_a_name} className="w-full h-full object-cover" title={match.team_a_name} />
-                        ) : (
-                            <span className="text-xl font-bold text-gray-600">{match.team_a_shortname?.[0]}</span>
-                        )}
+                        <EntityLogo src={match.team_a_logotype} alt={match.team_a_name} fallback={match.team_a_shortname?.[0] || '?'} className="w-full h-full object-cover" title={match.team_a_name} />
                     </div>
                 </div>
 
@@ -281,11 +242,7 @@ export default function Matches() {
                 {/* Team B */}
                 <div className="flex flex-col items-center gap-2 group/team">
                     <div className="w-16 h-16 bg-dark-900 rounded-full flex items-center justify-center overflow-hidden border-2 border-white/5 shadow-lg group-hover/team:border-orange-500/50 transition-all relative">
-                        {match.team_b_logotype ? (
-                            <img src={match.team_b_logotype} alt={match.team_b_name} className="w-full h-full object-cover" title={match.team_b_name} />
-                        ) : (
-                            <span className="text-xl font-bold text-gray-600">{match.team_b_shortname?.[0]}</span>
-                        )}
+                        <EntityLogo src={match.team_b_logotype} alt={match.team_b_name} fallback={match.team_b_shortname?.[0] || '?'} className="w-full h-full object-cover" title={match.team_b_name} />
                     </div>
                 </div>
             </div>
@@ -294,7 +251,7 @@ export default function Matches() {
             <div className="flex flex-col items-end justify-center w-32 shrink-0 border-l border-white/5 pl-6 gap-2">
                 <div className="w-8 h-8 rounded-lg bg-dark-900 flex items-center justify-center overflow-hidden border border-white/10" title={match.tournament_name}>
                     {match.tournament_logotype ? (
-                        <img src={match.tournament_logotype} alt={match.tournament_name} className="w-full h-full object-cover" />
+                        <EntityLogo src={match.tournament_logotype} alt={match.tournament_name} fallback="" className="w-full h-full object-cover" />
                     ) : (
                         <Trophy size={14} className="text-gray-500" />
                     )}
@@ -315,7 +272,8 @@ export default function Matches() {
                         e.preventDefault();
                         const fullMatch = await fetchMatch(match.id);
                         if (fullMatch) {
-                            const doc = generateMatchesPDF([fullMatch]);
+                            const { generateMatchesPDF } = await import('../utils/pdfGenerator');
+                            const doc = await generateMatchesPDF([fullMatch]);
                             doc.save(`sumula_${match.id}.pdf`);
                         }
                     }} 

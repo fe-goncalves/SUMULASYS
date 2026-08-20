@@ -1,7 +1,8 @@
-// Advanced cache utility with configurable TTL
-const DEFAULT_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
-const AGGRESSIVE_CACHE_DURATION = 60 * 60 * 1000; // 1 hour for list views
-const MAX_CACHE_SIZE = 10 * 1024 * 1024; // 10MB
+const DEFAULT_CACHE_DURATION = 30 * 60 * 1000;
+const LIST_CACHE_DURATION = 60 * 60 * 1000;
+const MAX_CACHE_SIZE = 10 * 1024 * 1024;
+
+export type ListCacheKey = 'teams' | 'athletes' | 'committee' | 'tournaments' | 'matches';
 
 interface CacheEntry {
   data: any;
@@ -9,22 +10,28 @@ interface CacheEntry {
   ttl: number;
 }
 
-const CACHE_TTL_CONFIG: Record<string, number> = {
-  'teams': AGGRESSIVE_CACHE_DURATION,
-  'athletes': AGGRESSIVE_CACHE_DURATION,
-  'committee': AGGRESSIVE_CACHE_DURATION,
-  'tournaments': AGGRESSIVE_CACHE_DURATION,
-  'matches': AGGRESSIVE_CACHE_DURATION,
-};
+function storageKey(key: string, userId?: string): string {
+  return userId ? `cache_${key}_${userId}` : `cache_${key}`;
+}
 
-export function getCachedData(key: string): any | null {
+function isOversizedOrEmbedded(data: any): boolean {
   try {
-    const cached = localStorage.getItem(`cache_${key}`);
+    const sample = JSON.stringify(data);
+    if (sample.length > MAX_CACHE_SIZE * 0.15) return true;
+    return sample.includes('data:image');
+  } catch {
+    return true;
+  }
+}
+
+export function getCachedData(key: string, userId?: string): any | null {
+  try {
+    const cached = localStorage.getItem(storageKey(key, userId));
     if (!cached) return null;
 
     const entry: CacheEntry = JSON.parse(cached);
     if (Date.now() - entry.timestamp > entry.ttl) {
-      localStorage.removeItem(`cache_${key}`);
+      localStorage.removeItem(storageKey(key, userId));
       return null;
     }
 
@@ -35,37 +42,20 @@ export function getCachedData(key: string): any | null {
   }
 }
 
-export function setCachedData(key: string, data: any): void {
+export function setCachedData(key: string, data: any, userId?: string): void {
+  if (isOversizedOrEmbedded(data)) return;
+
   try {
-    const cacheBase = key.split('_')[0];
-    const ttl = CACHE_TTL_CONFIG[cacheBase] || DEFAULT_CACHE_DURATION;
-    
     const entry: CacheEntry = {
       data,
       timestamp: Date.now(),
-      ttl
+      ttl: LIST_CACHE_DURATION,
     };
-    
-    const cacheStr = JSON.stringify(entry);
-    
-    // Check if we're about to exceed cache limit
-    if (cacheStr.length > MAX_CACHE_SIZE * 0.1) {
-      console.warn(`Cache entry for ${key} is large: ${cacheStr.length / 1024}KB`);
-    }
-    
-    localStorage.setItem(`cache_${key}`, cacheStr);
+    localStorage.setItem(storageKey(key, userId), JSON.stringify(entry));
   } catch (error) {
     console.error('Error setting cache:', error);
-    // If storage quota exceeded, clear old cache entries
-    if (error instanceof Error && error.message.includes('QuotaExceededError')) {
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
       clearOldestCacheEntries();
-      try {
-        const ttl = CACHE_TTL_CONFIG[key] || DEFAULT_CACHE_DURATION;
-        const entry: CacheEntry = { data, timestamp: Date.now(), ttl };
-        localStorage.setItem(`cache_${key}`, JSON.stringify(entry));
-      } catch (retryError) {
-        console.error('Cache retry failed:', retryError);
-      }
     }
   }
 }
@@ -73,17 +63,17 @@ export function setCachedData(key: string, data: any): void {
 function clearOldestCacheEntries(): void {
   try {
     const entries = Object.keys(localStorage)
-      .filter(k => k.startsWith('cache_'))
-      .map(k => {
+      .filter((k) => k.startsWith('cache_'))
+      .map((k) => {
         try {
           const entry = JSON.parse(localStorage.getItem(k) || '{}') as CacheEntry;
-          return { key: k, timestamp: entry.timestamp };
+          return { key: k, timestamp: entry.timestamp || 0 };
         } catch {
           return { key: k, timestamp: 0 };
         }
       })
       .sort((a, b) => a.timestamp - b.timestamp)
-      .slice(0, Math.ceil(Object.keys(localStorage).length * 0.1));
+      .slice(0, 5);
 
     entries.forEach(({ key }) => localStorage.removeItem(key));
   } catch (error) {
@@ -91,19 +81,21 @@ function clearOldestCacheEntries(): void {
   }
 }
 
-export function clearCache(key?: string): void {
+export function clearCache(key?: string, userId?: string): void {
   if (key) {
-    Object.keys(localStorage).forEach(k => {
-      if (k.startsWith(`cache_${key}`)) {
+    if (userId) {
+      localStorage.removeItem(storageKey(key, userId));
+    }
+    Object.keys(localStorage).forEach((k) => {
+      if (k === `cache_${key}` || k.startsWith(`cache_${key}_`)) {
         localStorage.removeItem(k);
       }
     });
   } else {
-    // Clear all cache entries
-    Object.keys(localStorage).forEach(k => {
-      if (k.startsWith('cache_')) {
-        localStorage.removeItem(k);
-      }
+    Object.keys(localStorage).forEach((k) => {
+      if (k.startsWith('cache_')) localStorage.removeItem(k);
     });
   }
 }
+
+export { DEFAULT_CACHE_DURATION };
