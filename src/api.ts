@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
-import { persistLogotype, expectedLogoUrl, isRemoteUrl, isDataUrl } from './utils/logoStorage';
+import { persistLogotype, expectedLogoUrl, isRemoteUrl, isDataUrl, LOGOS_BUCKET } from './utils/logoStorage';
+import { clearCache } from './utils/cache';
 
 function generateMatchId(): string {
   const timestamp = Date.now();
@@ -451,6 +452,50 @@ export async function deleteMatch(id: string) {
   if (error) throw error;
 }
 
+async function upsertInChunks(table: string, rows: any[], chunkSize = 200) {
+  for (let index = 0; index < rows.length; index += chunkSize) {
+    const chunk = rows.slice(index, index + chunkSize);
+    const { error } = await supabase.from(table).upsert(chunk);
+    if (error) throw error;
+  }
+}
+
+async function persistLogosSequentially(
+  userId: string,
+  folder: 'teams' | 'tournaments',
+  rows: any[],
+) {
+  const result = [];
+  for (const row of rows) {
+    let logotype = row.logotype || null;
+    if (isDataUrl(logotype)) {
+      logotype = await persistLogotype(userId, folder, row.id, logotype);
+    } else if (typeof logotype === 'string' && !isRemoteUrl(logotype)) {
+      logotype = null;
+    }
+    result.push({ ...row, logotype });
+  }
+  return result;
+}
+
+async function removeUserLogos(userId: string) {
+  for (const folder of ['teams', 'tournaments'] as const) {
+    const prefix = `${userId}/${folder}`;
+    const { data } = await supabase.storage.from(LOGOS_BUCKET).list(prefix, { limit: 1000 });
+    if (!data?.length) continue;
+    await supabase.storage.from(LOGOS_BUCKET).remove(data.map((file) => `${prefix}/${file.name}`));
+  }
+}
+
+export async function deleteAllUserData(userId: string): Promise<void> {
+  for (const table of ['matches', 'athletes', 'committee', 'teams', 'tournaments'] as const) {
+    const { error } = await supabase.from(table).delete().eq('user_id', userId);
+    if (error) throw error;
+  }
+  await removeUserLogos(userId);
+  clearCache(undefined, userId);
+}
+
 // Backup
 export async function exportData(userId: string) {
   const [
@@ -476,13 +521,21 @@ export async function exportData(userId: string) {
   };
 }
 
-export async function importData(userId: string, data: any): Promise<{ success: boolean; error?: string }> {
+export async function importData(
+  userId: string,
+  data: any,
+  options: { replace?: boolean } = { replace: true },
+): Promise<{ success: boolean; error?: string; counts?: Record<string, number> }> {
   try {
-    const teams = await Promise.all((data.teams || []).map(async (t: any) => ({
+    if (options.replace) {
+      await deleteAllUserData(userId);
+    }
+
+    const teams = await persistLogosSequentially(userId, 'teams', (data.teams || []).map((t: any) => ({
       id: t.id,
       fullname: t.fullname,
       shortname: t.shortname,
-      logotype: await persistLogotype(userId, 'teams', t.id, t.logotype),
+      logotype: t.logotype || null,
       main_color: t.main_color || '#f97316',
       user_id: userId,
     })));
@@ -504,12 +557,12 @@ export async function importData(userId: string, data: any): Promise<{ success: 
       user_id: userId,
     }));
 
-    const tournaments = await Promise.all((data.tournaments || []).map(async (t: any) => ({
+    const tournaments = await persistLogosSequentially(userId, 'tournaments', (data.tournaments || []).map((t: any) => ({
       id: t.id,
       fullname: t.fullname,
       shortname: t.shortname,
       season: t.season,
-      logotype: await persistLogotype(userId, 'tournaments', t.id, t.logotype),
+      logotype: t.logotype || null,
       main_color: t.main_color || '#f97316',
       user_id: userId,
     })));
@@ -526,32 +579,24 @@ export async function importData(userId: string, data: any): Promise<{ success: 
       user_id: userId,
     }));
 
-    if (teams.length > 0) {
-      const { error } = await supabase.from('teams').upsert(teams);
-      if (error) throw error;
-    }
+    if (teams.length > 0) await upsertInChunks('teams', teams);
+    if (athletes.length > 0) await upsertInChunks('athletes', athletes);
+    if (committee.length > 0) await upsertInChunks('committee', committee);
+    if (tournaments.length > 0) await upsertInChunks('tournaments', tournaments);
+    if (matches.length > 0) await upsertInChunks('matches', matches);
 
-    if (athletes.length > 0) {
-      const { error } = await supabase.from('athletes').upsert(athletes);
-      if (error) throw error;
-    }
+    clearCache(undefined, userId);
 
-    if (committee.length > 0) {
-      const { error } = await supabase.from('committee').upsert(committee);
-      if (error) throw error;
-    }
-
-    if (tournaments.length > 0) {
-      const { error } = await supabase.from('tournaments').upsert(tournaments);
-      if (error) throw error;
-    }
-
-    if (matches.length > 0) {
-      const { error } = await supabase.from('matches').upsert(matches);
-      if (error) throw error;
-    }
-
-    return { success: true };
+    return {
+      success: true,
+      counts: {
+        teams: teams.length,
+        athletes: athletes.length,
+        committee: committee.length,
+        tournaments: tournaments.length,
+        matches: matches.length,
+      },
+    };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

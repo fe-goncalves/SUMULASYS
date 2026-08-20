@@ -1,16 +1,29 @@
-import React, { useState, useRef } from 'react';
-import { Download, Upload, AlertTriangle, CheckCircle, FileJson } from 'lucide-react';
-import { exportData, importData } from '../api';
+import React, { useRef, useState } from 'react';
+import { Download, Upload, AlertTriangle, CheckCircle, FileJson, Trash, FileSpreadsheet } from 'lucide-react';
+import { exportData, importData, deleteAllUserData } from '../api';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
+import { useCache } from '../contexts/CacheContext';
+import ConfirmationModal from '../components/ConfirmationModal';
+import {
+  BulkEntity,
+  csvRowsToBackup,
+  downloadCsvTemplate,
+  parseCsv,
+} from '../utils/csvImport';
 
 export default function Settings() {
   usePageTitle('Settings');
   const { user } = useAuth();
+  const { invalidateCache } = useCache();
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [csvEntity, setCsvEntity] = useState<BulkEntity>('teams');
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const jsonInputRef = useRef<HTMLInputElement>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -18,7 +31,6 @@ export default function Settings() {
     try {
       if (!user?.id) {
         setMessage({ type: 'error', text: 'User not authenticated' });
-        setIsExporting(false);
         return;
       }
       const data = await exportData(user.id);
@@ -31,7 +43,7 @@ export default function Settings() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      setMessage({ type: 'success', text: 'Data exported successfully!' });
+      setMessage({ type: 'success', text: 'Backup exported successfully.' });
     } catch (error) {
       console.error('Export failed:', error);
       setMessage({ type: 'error', text: 'Failed to export data.' });
@@ -40,145 +52,224 @@ export default function Settings() {
     }
   };
 
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
+  const handleDeleteAll = async () => {
+    if (!user?.id) return;
+    setIsDeleting(true);
+    setMessage(null);
+    try {
+      await deleteAllUserData(user.id);
+      invalidateCache();
+      setMessage({ type: 'success', text: 'All entities were deleted. You can now import the new data.' });
+    } catch (error: any) {
+      console.error('Delete all failed:', error);
+      setMessage({ type: 'error', text: `Failed to delete data: ${error.message}` });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleJsonFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
-      setMessage({ type: 'error', text: 'Please select a valid JSON file.' });
+    if (!file.name.endsWith('.json')) {
+      setMessage({ type: 'error', text: 'Select a JSON backup file.' });
+      event.target.value = '';
       return;
     }
 
-    if (!confirm('WARNING: Importing data will OVERWRITE all current system data. This action cannot be undone. Are you sure you want to proceed?')) {
-      if (fileInputRef.current) fileInputRef.current.value = '';
+    if (!confirm('This will DELETE all current entities and import the JSON. Continue?')) {
+      event.target.value = '';
       return;
     }
 
     setIsImporting(true);
     setMessage(null);
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        if (!user?.id) {
-          setMessage({ type: 'error', text: 'User not authenticated' });
-          setIsImporting(false);
-          return;
-        }
-        const json = JSON.parse(e.target?.result as string);
-        const result = await importData(user.id, json);
-        
-        if (result && result.success) {
-          setMessage({ type: 'success', text: 'Data imported successfully! The page will reload.' });
-          setTimeout(() => window.location.reload(), 2000);
-        } else {
-          throw new Error('Import failed');
-        }
-      } catch (error: any) {
-        console.error('Import failed:', error);
-        setMessage({ type: 'error', text: `Import failed: ${error.message}` });
-      } finally {
-        setIsImporting(false);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      }
-    };
-    reader.readAsText(file);
+    try {
+      if (!user?.id) throw new Error('User not authenticated');
+      const json = JSON.parse(await file.text());
+      const result = await importData(user.id, json, { replace: true });
+      if (!result.success) throw new Error(result.error || 'Import failed');
+      invalidateCache();
+      const counts = result.counts;
+      setMessage({
+        type: 'success',
+        text: `Imported ${counts?.teams || 0} teams, ${counts?.athletes || 0} athletes, ${counts?.committee || 0} committee, ${counts?.tournaments || 0} tournaments, ${counts?.matches || 0} matches. Reloading...`,
+      });
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (error: any) {
+      console.error('Import failed:', error);
+      setMessage({ type: 'error', text: `Import failed: ${error.message}` });
+    } finally {
+      setIsImporting(false);
+      event.target.value = '';
+    }
   };
+
+  const handleCsvFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.csv')) {
+      setMessage({ type: 'error', text: 'Select a CSV file.' });
+      event.target.value = '';
+      return;
+    }
+
+    setIsImporting(true);
+    setMessage(null);
+    try {
+      if (!user?.id) throw new Error('User not authenticated');
+      const rows = parseCsv(await file.text());
+      if (rows.length === 0) throw new Error('CSV has no data rows.');
+      const backup = csvRowsToBackup(csvEntity, rows);
+      const result = await importData(user.id, backup, { replace: false });
+      if (!result.success) throw new Error(result.error || 'Import failed');
+      invalidateCache();
+      setMessage({
+        type: 'success',
+        text: `Added ${rows.length} ${csvEntity} record(s).`,
+      });
+    } catch (error: any) {
+      console.error('CSV import failed:', error);
+      setMessage({ type: 'error', text: `CSV import failed: ${error.message}` });
+    } finally {
+      setIsImporting(false);
+      event.target.value = '';
+    }
+  };
+
+  const busy = isExporting || isImporting || isDeleting;
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
       <div>
         <h1 className="text-3xl font-bold text-white tracking-tight mb-2">System Settings</h1>
-        <p className="text-gray-400">Manage your system data and configurations.</p>
+        <p className="text-gray-400">Backup, wipe, and bulk-load teams, athletes, committee, tournaments, and matches.</p>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
-        {/* Export Section */}
-        <div className="glass-panel rounded-2xl p-6 border border-white/5 shadow-lg relative overflow-hidden group">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600 opacity-50 group-hover:opacity-100 transition-opacity" />
+        <div className="glass-panel rounded-2xl p-6 border border-white/5 shadow-lg relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-blue-500 opacity-50" />
           <div className="flex items-center gap-4 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20 shadow-inner">
+            <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20">
               <Download size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">Export Data</h2>
-              <p className="text-sm text-gray-400">Download a backup of all system data</p>
+              <h2 className="text-xl font-bold text-white">1. Export backup</h2>
+              <p className="text-sm text-gray-400">Download current data before wiping</p>
             </div>
           </div>
           <p className="text-gray-400 mb-6 text-sm leading-relaxed">
-            Create a full JSON backup of your teams, athletes, committee members, tournaments, and matches. 
-            Keep this file safe to restore your data later.
+            Save a JSON backup first. Wipe cannot be undone.
           </p>
           <button
             onClick={handleExport}
-            disabled={isExporting}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/20 border border-blue-500/20"
+            disabled={busy}
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-blue-600/20 border border-blue-500/20"
           >
-            {isExporting ? (
-              <span className="animate-pulse">Exporting...</span>
-            ) : (
-              <>
-                <Download size={20} />
-                Download Backup
-              </>
-            )}
+            {isExporting ? <span className="animate-pulse">Exporting...</span> : <><Download size={20} /> Download Backup</>}
           </button>
         </div>
 
-        {/* Import Section */}
-        <div className="glass-panel rounded-2xl p-6 border border-white/5 shadow-lg relative overflow-hidden group">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-orange-600 opacity-50 group-hover:opacity-100 transition-opacity" />
+        <div className="glass-panel rounded-2xl p-6 border border-red-500/20 shadow-lg relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-red-500" />
           <div className="flex items-center gap-4 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-400 border border-orange-500/20 shadow-inner">
+            <div className="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center text-red-400 border border-red-500/20">
+              <Trash size={24} />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-white">2. Delete all entities</h2>
+              <p className="text-sm text-gray-400">Only your user data is removed</p>
+            </div>
+          </div>
+          <p className="text-gray-400 mb-6 text-sm leading-relaxed">
+            Deletes matches, athletes, committee, teams, tournaments, and logos in Storage.
+          </p>
+          <button
+            onClick={() => setDeleteModalOpen(true)}
+            disabled={busy}
+            className="w-full bg-red-600 hover:bg-red-500 text-white font-medium py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-red-600/20 border border-red-500/20"
+          >
+            {isDeleting ? <span className="animate-pulse">Deleting...</span> : <><Trash size={20} /> Delete everything</>}
+          </button>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="glass-panel rounded-2xl p-6 border border-white/5 shadow-lg relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-orange-500 opacity-50" />
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-400 border border-orange-500/20">
               <Upload size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">Import Data</h2>
-              <p className="text-sm text-gray-400">Restore system data from a backup file</p>
+              <h2 className="text-xl font-bold text-white">3. Bulk JSON</h2>
+              <p className="text-sm text-gray-400">Full replace from a backup file</p>
             </div>
           </div>
-          
-          <div className="bg-orange-900/10 border border-orange-500/20 rounded-lg p-4 mb-6 flex gap-3 items-start">
-            <AlertTriangle className="text-orange-500 shrink-0 mt-0.5" size={18} />
-            <p className="text-orange-200/80 text-xs leading-relaxed">
-              <strong className="text-orange-400">Warning:</strong> Importing data will permanently delete and overwrite all current system data. 
-              This action cannot be undone. Please ensure you have a backup of your current data before proceeding.
-            </p>
-          </div>
-
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept=".json,application/json"
-            className="hidden"
-          />
-          
+          <p className="text-gray-400 mb-6 text-sm leading-relaxed">
+            Wipes current data, then loads teams, athletes, committee, tournaments, and matches from JSON.
+          </p>
+          <input ref={jsonInputRef} type="file" accept=".json,application/json" onChange={handleJsonFile} className="hidden" />
           <button
-            onClick={handleImportClick}
-            disabled={isImporting}
-            className="w-full bg-white/5 hover:bg-white/10 text-white font-medium py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed border border-white/10 hover:border-white/20"
+            onClick={() => jsonInputRef.current?.click()}
+            disabled={busy}
+            className="w-full bg-white/5 hover:bg-white/10 text-white font-medium py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 border border-white/10"
           >
-            {isImporting ? (
-              <span className="animate-pulse">Importing...</span>
-            ) : (
-              <>
-                <Upload size={20} />
-                Select Backup File
-              </>
-            )}
+            {isImporting ? <span className="animate-pulse">Importing...</span> : <><Upload size={20} /> Select JSON file</>}
+          </button>
+        </div>
+
+        <div className="glass-panel rounded-2xl p-6 border border-white/5 shadow-lg relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-green-500 opacity-50" />
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center text-green-400 border border-green-500/20">
+              <FileSpreadsheet size={24} />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-white">3. Bulk CSV</h2>
+              <p className="text-sm text-gray-400">Add one entity type at a time</p>
+            </div>
+          </div>
+          <p className="text-gray-400 mb-4 text-sm leading-relaxed">
+            After wiping, import teams first, then athletes/committee, then tournaments, then matches. Dates can be DD/MM/YYYY.
+          </p>
+          <select
+            value={csvEntity}
+            onChange={(event) => setCsvEntity(event.target.value as BulkEntity)}
+            className="w-full glass-input rounded-xl px-4 py-3 text-white mb-3 appearance-none"
+          >
+            <option value="teams" className="bg-dark-900">Teams</option>
+            <option value="athletes" className="bg-dark-900">Athletes</option>
+            <option value="committee" className="bg-dark-900">Committee</option>
+            <option value="tournaments" className="bg-dark-900">Tournaments</option>
+            <option value="matches" className="bg-dark-900">Matches</option>
+          </select>
+          <div className="flex gap-2 mb-3">
+            <button
+              type="button"
+              onClick={() => downloadCsvTemplate(csvEntity)}
+              className="flex-1 px-3 py-2 text-sm text-gray-300 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10"
+            >
+              Download template
+            </button>
+          </div>
+          <input ref={csvInputRef} type="file" accept=".csv,text/csv" onChange={handleCsvFile} className="hidden" />
+          <button
+            onClick={() => csvInputRef.current?.click()}
+            disabled={busy}
+            className="w-full bg-green-600 hover:bg-green-500 text-white font-medium py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 border border-green-500/20"
+          >
+            {isImporting ? <span className="animate-pulse">Importing...</span> : <><FileSpreadsheet size={20} /> Select CSV</>}
           </button>
         </div>
       </div>
 
       {message && (
-        <div className={`p-4 rounded-xl flex items-center gap-3 backdrop-blur-md shadow-lg border ${
-          message.type === 'success' 
-            ? 'bg-green-500/10 border-green-500/20 text-green-400' 
+        <div className={`p-4 rounded-xl flex items-center gap-3 border ${
+          message.type === 'success'
+            ? 'bg-green-500/10 border-green-500/20 text-green-400'
             : 'bg-red-500/10 border-red-500/20 text-red-400'
         }`}>
           {message.type === 'success' ? <CheckCircle size={20} /> : <AlertTriangle size={20} />}
@@ -189,21 +280,34 @@ export default function Settings() {
       <div className="glass-panel rounded-2xl p-6 border border-white/5 shadow-lg">
         <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
           <FileJson size={20} className="text-gray-400" />
-          Data Structure Info
+          CSV columns
         </h3>
-        <div className="prose prose-invert prose-sm max-w-none text-gray-400">
-          <p>
-            The backup file is a standard JSON format containing arrays for:
-          </p>
-          <ul className="list-disc pl-5 space-y-1 mt-2 marker:text-orange-500">
-            <li><code className="text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-500/20">teams</code>: Team profiles and logos</li>
-            <li><code className="text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-500/20">athletes</code>: Player rosters linked to teams</li>
-            <li><code className="text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-500/20">committee</code>: Technical staff members</li>
-            <li><code className="text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-500/20">tournaments</code>: Competition details</li>
-            <li><code className="text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-500/20">matches</code>: Match schedules and results</li>
-          </ul>
-        </div>
+        <ul className="text-sm text-gray-400 space-y-2 list-disc pl-5 marker:text-orange-500">
+          <li><code className="text-orange-400">teams</code>: id, fullname, shortname, main_color</li>
+          <li><code className="text-orange-400">athletes</code>: id, fullname, surname, date_of_birth, team_id</li>
+          <li><code className="text-orange-400">committee</code>: id, fullname, surname, team_id</li>
+          <li><code className="text-orange-400">tournaments</code>: id, fullname, shortname, season, main_color</li>
+          <li><code className="text-orange-400">matches</code>: id (optional), tournament_id, date, phase, round, team_a_id, team_b_id</li>
+        </ul>
       </div>
+
+      <ConfirmationModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={handleDeleteAll}
+        title="Delete all entities"
+        message="This permanently deletes all teams, athletes, committee members, tournaments, and matches for your account. Export a backup first. This cannot be undone."
+        confirmText="Yes, delete everything"
+        isDestructive={true}
+      />
+
+      {(isDeleting || isImporting) && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center z-[100]">
+          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4" />
+          <h2 className="text-2xl font-bold text-white mb-2">{isDeleting ? 'Deleting data...' : 'Importing data...'}</h2>
+          <p className="text-gray-400">Please wait.</p>
+        </div>
+      )}
     </div>
   );
 }
