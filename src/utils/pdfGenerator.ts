@@ -138,8 +138,11 @@ const drawMatchScoreSheet = (doc: jsPDF, match: any) => {
             { content: 'COMISSÃO TÉCNICA', colSpan: 6, styles: row2Style },
         ]);
 
-        // Helper to get athlete/committee safely
-        const getAth = (idx: number) => (team.athletes || [])[idx] || {};
+        // Athletes on the sheet follow surname A–Z; copy so match data is not mutated.
+        const athletesBySurname = [...(team.athletes || [])].sort((a, b) =>
+            (a.surname || '').localeCompare(b.surname || '', 'pt-BR', { sensitivity: 'base' })
+        );
+        const getAth = (idx: number) => athletesBySurname[idx] || {};
         const getCom = (idx: number) => (team.committee || [])[idx] || {};
         
         const goalIdStyle = { fillColor: [29, 29, 29], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold', minCellHeight: 5.3 } as any;
